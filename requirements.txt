@@ -3,4 +3,3 @@ Django==6.0.5
 djangorestframework==3.17.1
 psycopg==3.3.4
 sqlparse==0.5.5
-python3 -m venv venv
