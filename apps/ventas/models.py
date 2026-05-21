@@ -3,7 +3,7 @@ from django.db import models
 class CarritoDeCompras(models.Model):
     # Relación intermedia entre Cliente y Producto
     cliente = models.ForeignKey('usuarios.Usuario', on_delete=models.CASCADE, help_text="Usuario/Cliente al que pertenece el carrito")
-    producto_id = models.IntegerField(help_text="ID del producto (Reemplazar con ForeignKey a inventario.Producto cuando exista)")
+    producto = models.ForeignKey('inventario.Producto', on_delete=models.CASCADE, help_text="Producto en el carrito")
     cantidad = models.PositiveIntegerField(default=1)
 
     class Meta:
@@ -12,7 +12,7 @@ class CarritoDeCompras(models.Model):
         verbose_name_plural = 'Carritos de Compras'
 
     def __str__(self):
-        return f"Carrito Cliente {self.cliente.id} - Producto {self.producto_id}"
+        return f"Carrito Cliente {self.cliente.id} - Producto {self.producto.id}"
 
 
 class Pedido(models.Model):
@@ -55,7 +55,7 @@ class Pedido(models.Model):
 
 class PedidoProducto(models.Model):
     pedido = models.ForeignKey(Pedido, on_delete=models.CASCADE, related_name='productos')
-    producto_id = models.IntegerField(help_text="ID del producto (Reemplazar con ForeignKey a inventario.Producto cuando exista)")
+    producto = models.ForeignKey('inventario.Producto', on_delete=models.PROTECT, help_text="Producto del pedido")
     cantidad = models.PositiveIntegerField()
     subtotal = models.DecimalField(max_digits=10, decimal_places=2)
 
@@ -65,4 +65,4 @@ class PedidoProducto(models.Model):
         verbose_name_plural = 'Pedidos Productos'
 
     def __str__(self):
-        return f"Pedido {self.pedido.id} - Producto {self.producto_id}"
+        return f"Pedido {self.pedido.id} - Producto {self.producto.id}"
