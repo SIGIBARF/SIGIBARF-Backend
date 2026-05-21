@@ -18,10 +18,6 @@ def get_user_role_name(user) -> str | None:
     if rol is not None:
         return getattr(rol, 'nombre', None)
 
-    perfil = getattr(user, 'usuario', None)
-    if perfil is not None:
-        return perfil.rol.nombre
-
     return None
 
 
