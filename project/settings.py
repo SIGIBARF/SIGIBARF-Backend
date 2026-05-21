@@ -31,6 +31,7 @@ ALLOWED_HOSTS = [
 FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:5173')
 RESEND_API_KEY = os.getenv('RESEND_API_KEY', '')
 DEFAULT_FROM_EMAIL = os.getenv('DEFAULT_FROM_EMAIL', 'SIGIBARF <onboarding@resend.dev>')
+GOOGLE_OAUTH_CLIENT_ID = os.getenv('GOOGLE_OAUTH_CLIENT_ID', '')
 
 
 # Application definition

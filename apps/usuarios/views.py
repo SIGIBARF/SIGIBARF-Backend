@@ -14,6 +14,7 @@ from apps.usuarios.permissions import get_user_role_name
 from apps.usuarios.serializers import (
     ChangePasswordSerializer,
     ConfirmResetPasswordSerializer,
+    GoogleLoginSerializer,
     LoginSerializer,
     RegistroSerializer,
     ResetPasswordSerializer,
@@ -47,6 +48,22 @@ class RegistroView(generics.CreateAPIView):
                 'user': UsuarioSerializer(user).data,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class GoogleLoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = GoogleLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        return Response(
+            {
+                'tokens': get_tokens_for_user(user),
+                'user': UsuarioSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
         )
 
 
