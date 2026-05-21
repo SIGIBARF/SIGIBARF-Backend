@@ -23,6 +23,13 @@ from apps.usuarios.serializers import (
 from apps.usuarios.utils import change_user_password, send_reset_password_email
 
 
+class HealthView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'status': 'ok'}, status=status.HTTP_200_OK)
+
+
 def get_tokens_for_user(user):
     refresh = RefreshToken.for_user(user)
     rol = get_user_role_name(user)
