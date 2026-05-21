@@ -3,7 +3,12 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from apps.usuarios.models import Usuario
-from apps.usuarios.utils import change_user_password, create_cliente
+from apps.usuarios.utils import (
+    GoogleAuthError,
+    change_user_password,
+    create_cliente,
+    get_or_create_user_from_google,
+)
 
 
 class UsuarioSerializer(serializers.ModelSerializer):
@@ -63,6 +68,17 @@ class RegistroSerializer(serializers.Serializer):
         validated_data.pop('password_confirm')
         password = validated_data.pop('password')
         return create_cliente(password=password, **validated_data)
+
+
+class GoogleLoginSerializer(serializers.Serializer):
+    id_token = serializers.CharField(write_only=True)
+
+    def validate(self, attrs):
+        try:
+            attrs['user'] = get_or_create_user_from_google(attrs['id_token'])
+        except GoogleAuthError as exc:
+            raise serializers.ValidationError(str(exc)) from exc
+        return attrs
 
 
 class LoginSerializer(serializers.Serializer):

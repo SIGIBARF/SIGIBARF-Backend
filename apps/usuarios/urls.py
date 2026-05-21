@@ -3,6 +3,8 @@ from django.urls import path
 from apps.usuarios.views import (
     ChangePasswordView,
     ConfirmResetPasswordView,
+    GoogleLoginView,
+    HealthView,
     LoginView,
     LogoutView,
     PerfilView,
@@ -12,7 +14,9 @@ from apps.usuarios.views import (
 )
 
 urlpatterns = [
+    path('health/', HealthView.as_view(), name='health'),
     path('auth/register/', RegistroView.as_view(), name='register'),
+    path('auth/google/', GoogleLoginView.as_view(), name='google-login'),
     path('auth/login/', LoginView.as_view(), name='login'),
     path('auth/logout/', LogoutView.as_view(), name='logout'),
     path('auth/refresh/', RefreshTokenView.as_view(), name='token-refresh'),

@@ -14,12 +14,20 @@ from apps.usuarios.permissions import get_user_role_name
 from apps.usuarios.serializers import (
     ChangePasswordSerializer,
     ConfirmResetPasswordSerializer,
+    GoogleLoginSerializer,
     LoginSerializer,
     RegistroSerializer,
     ResetPasswordSerializer,
     UsuarioSerializer,
 )
 from apps.usuarios.utils import change_user_password, send_reset_password_email
+
+
+class HealthView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        return Response({'status': 'ok'}, status=status.HTTP_200_OK)
 
 
 def get_tokens_for_user(user):
@@ -47,6 +55,22 @@ class RegistroView(generics.CreateAPIView):
                 'user': UsuarioSerializer(user).data,
             },
             status=status.HTTP_201_CREATED,
+        )
+
+
+class GoogleLoginView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = GoogleLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = serializer.validated_data['user']
+        return Response(
+            {
+                'tokens': get_tokens_for_user(user),
+                'user': UsuarioSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
         )
 
 
