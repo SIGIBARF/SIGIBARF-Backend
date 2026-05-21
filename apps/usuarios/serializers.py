@@ -3,7 +3,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework import serializers
 
 from apps.usuarios.models import Usuario
-from apps.usuarios.utils import create_cliente
+from apps.usuarios.utils import change_user_password, create_cliente
 
 
 class UsuarioSerializer(serializers.ModelSerializer):
@@ -81,3 +81,49 @@ class LoginSerializer(serializers.Serializer):
             raise serializers.ValidationError('La cuenta está inactiva.')
         attrs['user'] = user
         return attrs
+
+
+class ResetPasswordSerializer(serializers.Serializer):
+    correo = serializers.EmailField()
+
+
+class ConfirmResetPasswordSerializer(serializers.Serializer):
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    new_password_confirm = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_new_password(self, value):
+        validate_password(value)
+        return value
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError({
+                'new_password_confirm': 'Las contraseñas no coinciden.',
+            })
+        return attrs
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+    new_password_confirm = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_new_password(self, value):
+        validate_password(value)
+        return value
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['new_password_confirm']:
+            raise serializers.ValidationError({
+                'new_password_confirm': 'Las contraseñas no coinciden.',
+            })
+        return attrs
+
+    def save(self, **kwargs):
+        user = self.context['request'].user
+        if not user.check_password(self.validated_data['current_password']):
+            raise serializers.ValidationError({
+                'current_password': 'La contraseña actual no es correcta.',
+            })
+        change_user_password(user, self.validated_data['new_password'])
+        return user
