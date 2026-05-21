@@ -1,8 +1,8 @@
 from rest_framework import serializers
 from decimal import Decimal
 from django.core.validators import MinValueValidator
-import models
-import validators as my_validators
+from . import models
+from . import validators as my_validators
 
 
 class IngredienteSerializer(serializers.ModelSerializer):
