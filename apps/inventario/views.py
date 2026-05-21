@@ -4,9 +4,9 @@ from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError
 
-import serializers
-import services
-import models
+from . import serializers
+from . import services
+from . import models
 
 
 class IngredienteViewSet(viewsets.ModelViewSet):
