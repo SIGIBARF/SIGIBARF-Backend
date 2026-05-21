@@ -1,4 +1,4 @@
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import SAFE_METHODS, BasePermission
 
 ROLE_CLIENTE = 'Cliente'
 ROLE_ADMINISTRADOR = 'Administrador'
@@ -35,12 +35,20 @@ def user_is_administrador(user) -> bool:
     return user_has_role(user, ROLE_ADMINISTRADOR)
 
 
-class RolePermission(BasePermission):
-    """Base: permite acceso solo si el usuario tiene el rol indicado."""
+def _is_staff_or_superuser(user) -> bool:
+    return bool(
+        user
+        and getattr(user, 'is_authenticated', False)
+        and (getattr(user, 'is_superuser', False) or getattr(user, 'is_staff', False))
+    )
 
+
+class RolePermission(BasePermission):
     role_name = None
 
     def has_permission(self, request, view):
+        if _is_staff_or_superuser(request.user):
+            return True
         if not self.role_name:
             return False
         return user_has_role(request.user, self.role_name)
@@ -52,3 +60,21 @@ class IsCliente(RolePermission):
 
 class IsAdministrador(RolePermission):
     role_name = ROLE_ADMINISTRADOR
+
+
+class IsClienteOrAdministrador(BasePermission):
+    def has_permission(self, request, view):
+        if _is_staff_or_superuser(request.user):
+            return True
+        return user_has_role(request.user, ROLE_CLIENTE, ROLE_ADMINISTRADOR)
+
+
+class IsAdministradorOrReadOnly(BasePermission):
+    def has_permission(self, request, view):
+        if _is_staff_or_superuser(request.user):
+            return True
+        if not request.user or not request.user.is_authenticated:
+            return False
+        if request.method in SAFE_METHODS:
+            return user_has_role(request.user, ROLE_CLIENTE, ROLE_ADMINISTRADOR)
+        return user_is_administrador(request.user)
