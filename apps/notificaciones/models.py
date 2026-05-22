@@ -18,7 +18,7 @@ class Notificacion(models.Model):
     )
 
     producto = models.ForeignKey(
-        "productos.Producto",
+        "inventario.Producto",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
