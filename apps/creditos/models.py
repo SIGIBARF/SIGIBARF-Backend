@@ -9,7 +9,7 @@ class Credito(models.Model):
         VENCIDO = "vencido", "Vencido"
 
     pedido = models.ForeignKey(
-        "inventario.Pedido",
+        "ventas.Pedido",
         on_delete=models.PROTECT,
         null=True,
         blank=True,

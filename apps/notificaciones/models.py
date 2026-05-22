@@ -25,7 +25,7 @@ class Notificacion(models.Model):
     )
 
     ingrediente = models.ForeignKey(
-        "productos.Ingrediente",
+        "inventario.Ingrediente",
         on_delete=models.PROTECT,
         null=True,
         blank=True,
