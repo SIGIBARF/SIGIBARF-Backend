@@ -35,11 +35,6 @@ class MovimientoProductoViewSet(viewsets.ModelViewSet):
 
 
 class ProduccionAPIView(APIView):
-    """Endpoint para crear una producción (lógica en services.crear_produccion)
-
-    POST: {"id_producto": 1, "cantidad_producida": 10}
-    GET: lista de producciones (últimas 50)
-    """
 
     def get(self, request):
         producciones = models.Produccion.objects.select_related('id_producto').order_by('-fecha')[:50]
@@ -60,7 +55,10 @@ class ProduccionAPIView(APIView):
         try:
             produccion = services.crear_produccion(id_producto=int(id_producto), cantidad_producida=cantidad)
         except ValidationError as e:
-            return Response({'detail': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {'detail': e.message if hasattr(e, 'message') else e.messages[0]},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         except models.Producto.DoesNotExist:
             return Response({'detail': 'Producto no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
 

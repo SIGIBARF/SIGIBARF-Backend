@@ -11,38 +11,27 @@ def crear_produccion(id_producto, cantidad_producida):
         raise ValidationError('cantidad_producida debe ser mayor que 0')
 
     with transaction.atomic():
-        # Lock producto row
+        # traer el producto (select for update para que no se edite el producto durante la produccion)
         producto = models.Producto.objects.select_for_update().get(pk=id_producto)
 
         # traer ingredientes del producto
         relacion_ings = models.ProductoIngrediente.objects.select_related('id_ingrediente').filter(id_producto=producto)
 
-        # calcular requerimientos por ingrediente
-        requeridos = []  # tuples (ingrediente, requerido_int, porcentaje_decimal)
-        for rel in relacion_ings:
-            porcentaje = Decimal(rel.porcentaje_ingrediente)
-            # cantidad requerida = porcentaje (%) * cantidad_producida
-            req_decimal = (porcentaje / Decimal('100')) * Decimal(cantidad_producida)
-            req_int = int(math.ceil(float(req_decimal)))
-            requeridos.append((rel.id_ingrediente, req_int, porcentaje))
-
         # validar stock suficiente
         insuficientes = []
-        for ingrediente, req_int, _ in requeridos:
-            ingrediente = models.Ingrediente.objects.select_for_update().get(pk=ingrediente.pk)
-            if ingrediente.stock_actual < req_int:
-                insuficientes.append((ingrediente, req_int))
+        for rel in relacion_ings:
+            if rel.id_ingrediente.stock_actual < rel.cantidad_ingrediente*cantidad_producida:
+                insuficientes.append((rel.id_ingrediente, rel.cantidad_ingrediente*cantidad_producida))
 
         if insuficientes:
             ing, req = insuficientes[0]
             raise ValidationError(f'Ingrediente "{ing.nombre}" (id={ing.id}) no tiene stock suficiente: requerido {req}, disponible {ing.stock_actual}')
 
         # descontar ingredientes y crear movimientos
-        movimientos_ingrediente = []
-        for ingrediente, req_int, _ in requeridos:
-            ingrediente = models.Ingrediente.objects.select_for_update().get(pk=ingrediente.pk)
+        for rel in relacion_ings:
+            ingrediente = models.Ingrediente.objects.select_for_update().get(pk=rel.id_ingrediente.id)
             stock_anterior = ingrediente.stock_actual
-            ingrediente.stock_actual = stock_anterior - req_int
+            ingrediente.stock_actual = stock_anterior - rel.cantidad_ingrediente*cantidad_producida
             ingrediente.save()
 
             mov = models.MovimientoIngrediente.objects.create(
@@ -50,9 +39,9 @@ def crear_produccion(id_producto, cantidad_producida):
                 tipo_movimiento='SALIDA',
                 stock_anterior=stock_anterior,
                 stock_posterior=ingrediente.stock_actual,
-                cantidad=req_int,
+                cantidad=rel.cantidad_ingrediente*cantidad_producida,
+                comentarios="Movimiento de salida generado por producción.",
             )
-            movimientos_ingrediente.append(mov)
 
         # aumentar stock del producto y crear movimiento producto
         stock_anterior_prod = producto.stock_actual
@@ -65,6 +54,7 @@ def crear_produccion(id_producto, cantidad_producida):
             stock_anterior=stock_anterior_prod,
             stock_posterior=producto.stock_actual,
             cantidad=cantidad_producida,
+            comentarios="Movimiento de entrada generado por producción."
         )
 
         # crear registro de produccion

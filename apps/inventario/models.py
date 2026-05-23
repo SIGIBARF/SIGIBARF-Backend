@@ -22,10 +22,10 @@ class Ingrediente(models.Model):
     id = models.AutoField(primary_key=True)
     nombre = models.CharField(max_length=100)
     proveedor = models.CharField(max_length=100)
-    stock_actual = models.PositiveIntegerField(validators=[MinValueValidator(0)])
-    stock_minimo = models.PositiveIntegerField(validators=[MinValueValidator(0)])
+    stock_actual = models.DecimalField(max_digits=10, decimal_places=2)
+    stock_minimo = models.DecimalField(max_digits=10, decimal_places=2)
     unidad_medida = models.CharField(max_length=3, choices=UNIDADES)
-    
+
     class Meta:
         db_table = 'ingrediente'
         verbose_name = 'Ingrediente'
@@ -39,11 +39,12 @@ class Ingrediente(models.Model):
 class Producto(models.Model):
     id = models.AutoField(primary_key=True)
     nombre = models.CharField(max_length=100)
-    precio = models.DecimalField(max_digits=10, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
-    stock_actual = models.PositiveIntegerField(validators=[MinValueValidator(0)])
-    stock_minimo = models.PositiveIntegerField(validators=[MinValueValidator(0)])
+    precio = models.DecimalField(max_digits=10, decimal_places=2)
+    stock_actual = models.PositiveIntegerField()
+    stock_minimo = models.PositiveIntegerField()
     inhabilitado = models.BooleanField(default=False)
-    
+    ingredientes = models.ManyToManyField(Ingrediente, through='ProductoIngrediente', related_name='productos')
+
     class Meta:
         db_table = 'producto'
         verbose_name = 'Producto'
@@ -56,10 +57,12 @@ class Producto(models.Model):
 
 class ProductoIngrediente(models.Model):
     id = models.AutoField(primary_key=True)
-    id_producto = models.ForeignKey(Producto, on_delete=models.CASCADE, related_name='ingredientes')
+    id_producto = models.ForeignKey(Producto, on_delete=models.CASCADE)
     id_ingrediente = models.ForeignKey(Ingrediente, on_delete=models.CASCADE)
-    porcentaje_ingrediente = models.DecimalField(max_digits=5, decimal_places=2, validators=[MinValueValidator(Decimal('0.01'))])
-    
+    cantidad_producida = models.PositiveIntegerField()
+    cantidad_ingrediente = models.DecimalField(max_digits=10, decimal_places=2)
+    porcentaje_ingrediente = models.DecimalField(max_digits=5, decimal_places=2)
+
     class Meta:
         db_table = 'producto_ingrediente'
         verbose_name = 'Producto_Ingrediente'
