@@ -51,7 +51,10 @@ class RegistroView(generics.CreateAPIView):
         user = serializer.save()
         return Response(
             {
-                'tokens': get_tokens_for_user(user),
+                'detail': (
+                    'Cuenta creada correctamente. '
+                    'Inicia sesión con tu correo y contraseña.'
+                ),
                 'user': UsuarioSerializer(user).data,
             },
             status=status.HTTP_201_CREATED,
