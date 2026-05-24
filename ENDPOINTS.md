@@ -442,7 +442,7 @@ Todos los privados requieren JWT por la configuracion global. Actualmente no hay
 | `precio` | decimal string, 10 digitos, 2 decimales | Si | Si | Debe ser `> 0`. |
 | `stock_actual` | integer | Si | Si | Minimo `0`. |
 | `stock_minimo` | integer | Si | Si | Minimo `0`. |
-| `inhabilitado` | boolean | No | Si | Default `false`. Frontend publico deberia ocultar productos inhabilitados si aplica regla de negocio. |
+| `inhabilitado` | boolean | No | Si | Default `false`. El endpoint publico de productos solo devuelve registros con `inhabilitado=false`. |
 | `ingredientes` | array de IDs | No | Si | ManyToMany through `ProductoIngrediente`; normalmente administrar desde `producto-ingredientes`. |
 
 ### ProductoIngrediente
@@ -510,7 +510,7 @@ Advertencia: igual que `MovimientoIngrediente`, la creacion directa no calcula s
 
 ### `GET /api/inventario/public/productos/`
 
-Publico. Lista productos.
+Publico. Lista productos habilitados. Excluye productos con `inhabilitado=true`.
 
 Respuesta `200`:
 
@@ -532,7 +532,7 @@ Notas para frontend:
 
 - Este endpoint no requiere token.
 - Devuelve los mismos campos que el serializer privado de producto.
-- Si no se deben mostrar productos deshabilitados, filtrar `inhabilitado === false` en frontend hasta que exista filtro backend.
+- Solo devuelve productos con `inhabilitado=false`; los productos inhabilitados no aparecen en la respuesta.
 
 ### `GET /api/inventario/public/ingredientes/`
 

@@ -38,7 +38,7 @@ class ProductoPublicAPIView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
-        productos = models.Producto.objects.all()
+        productos = models.Producto.objects.filter(inhabilitado=False)
         serializer = serializers.ProductoSerializer(productos, many=True)
         return Response(serializer.data)
 

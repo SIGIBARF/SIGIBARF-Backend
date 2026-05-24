@@ -1,7 +1,9 @@
 from decimal import Decimal
 
 from django.contrib.admin.sites import AdminSite
+from django.urls import reverse
 from django.test import RequestFactory, TestCase
+from rest_framework.test import APITestCase
 
 from apps.inventario import admin as inventario_admin
 from apps.inventario import services
@@ -13,6 +15,32 @@ from apps.inventario.models import (
     Producto,
     ProductoIngrediente,
 )
+
+
+class ProductoPublicAPIViewTest(APITestCase):
+
+    def test_lista_solo_productos_habilitados(self):
+        producto_habilitado = Producto.objects.create(
+            nombre="Producto habilitado",
+            precio=Decimal("12000.00"),
+            stock_actual=10,
+            stock_minimo=2,
+            inhabilitado=False,
+        )
+        Producto.objects.create(
+            nombre="Producto inhabilitado",
+            precio=Decimal("9000.00"),
+            stock_actual=5,
+            stock_minimo=1,
+            inhabilitado=True,
+        )
+
+        response = self.client.get(reverse("public-productos"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], producto_habilitado.id)
+        self.assertFalse(response.data[0]["inhabilitado"])
 
 
 class ProduccionStockTest(TestCase):
