@@ -435,15 +435,16 @@ Todos los privados requieren JWT por la configuracion global. Actualmente no hay
 
 ### Producto
 
-| Campo | Tipo | Requerido al crear | Publico | Validaciones / Notas |
-|---|---:|---:|---:|---|
-| `id` | integer | No | Si | Autogenerado. |
-| `nombre` | string, max 100 | Si | Si | No puede ser vacio. |
-| `precio` | decimal string, 10 digitos, 2 decimales | Si | Si | Debe ser `> 0`. |
-| `stock_actual` | integer | Si | Si | Minimo `0`. |
-| `stock_minimo` | integer | Si | Si | Minimo `0`. |
-| `inhabilitado` | boolean | No | Si | Default `false`. El endpoint publico de productos solo devuelve registros con `inhabilitado=false`. |
-| `ingredientes` | array de IDs | No | Si | ManyToMany through `ProductoIngrediente`; normalmente administrar desde `producto-ingredientes`. |
+| Campo          |                                    Tipo | Requerido al crear | Publico | Validaciones / Notas                                                                                       |
+|----------------|----------------------------------------:|---:|---:|------------------------------------------------------------------------------------------------------------|
+| `id`           |                                 integer | No | Si | Autogenerado.                                                                                              |
+| `nombre`       |                         string, max 100 | Si | Si | No puede ser vacio.                                                                                        |
+| `precio`       | decimal string, 10 digitos, 2 decimales | Si | Si | Debe ser `> 0`.                                                                                            |
+| `stock_actual` |                                 integer | Si | Si | Minimo `0`.                                                                                                |
+| `stock_minimo` |                                 integer | Si | Si | Minimo `0`.                                                                                                |
+| `inhabilitado` |                                 boolean | No | Si | Default `false`. El endpoint publico de productos solo devuelve registros con `inhabilitado=false`.        |
+| `Descripción`  |                          campo de texto | No | Si | Campo para anotar la descripción del producto, estas se encuentran en el catalogo de ventas de la empresa. |
+| `ingredientes` |                            array de IDs | No | Si | ManyToMany through `ProductoIngrediente`; normalmente administrar desde `producto-ingredientes`.           |
 
 ### ProductoIngrediente
 
