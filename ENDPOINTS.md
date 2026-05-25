@@ -358,7 +358,7 @@ Respuesta `200`, exista o no el correo:
 Notas:
 
 - Si `RESEND_API_KEY` no esta configurada, el backend no envia correo real y registra/imprime el contenido.
-- El enlace enviado apunta a `{FRONTEND_URL}/reset-password?uid=<uidb64>&token=<token>`.
+- El enlace enviado apunta a `{FRONTEND_URL}/auth/reset-password?uid=<uidb64>&token=<token>`.
 
 ### `GET /api/usuarios/auth/password-reset/confirm/<uidb64>/<token>/`
 

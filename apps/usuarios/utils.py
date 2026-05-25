@@ -153,7 +153,7 @@ def send_email(to_email, subject, html_content):
 
 
 def send_reset_password_email(correo, uidb64, token):
-    reset_url = f'{settings.FRONTEND_URL}/reset-password?uid={uidb64}&token={token}'
+    reset_url = f'{settings.FRONTEND_URL}/auth/reset-password?uid={uidb64}&token={token}'
     html = f"""
     <p>Hola,</p>
     <p>Se solicitó un restablecimiento de contraseña en SIGIBARF.</p>
