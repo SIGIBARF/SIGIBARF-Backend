@@ -28,6 +28,7 @@ class Credito(models.Model):
         max_digits=10,
         decimal_places=2,
     )
+    interes = models.DecimalField(max_digits=3, decimal_places=2, default=0)
 
     valor_cuota = models.DecimalField(
         max_digits=10,
@@ -35,6 +36,7 @@ class Credito(models.Model):
     )
 
     fecha_inicio = models.DateTimeField(auto_now_add=True)
+    fecha_fin = models.DateTimeField(blank=True)
 
     observaciones = models.TextField(blank=True)
 
