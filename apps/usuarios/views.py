@@ -2,7 +2,7 @@ from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_decode, urlsafe_base64_encode
 from rest_framework import generics, status
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.usuarios.models import Usuario
-from apps.usuarios.permissions import get_user_role_name
+from apps.usuarios.permissions import IsAdministrador, get_user_role_name
 from apps.usuarios.serializers import (
     ChangePasswordSerializer,
     ConfirmResetPasswordSerializer,
@@ -94,7 +94,7 @@ class LoginView(APIView):
 
 
 class LogoutView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdministrador]
 
     def post(self, request):
         refresh = request.data.get('refresh')
@@ -115,7 +115,7 @@ class LogoutView(APIView):
 
 class PerfilView(generics.RetrieveUpdateAPIView):
     serializer_class = UsuarioSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdministrador]
 
     def get_object(self):
         return self.request.user
@@ -133,7 +133,7 @@ class RefreshTokenView(TokenRefreshView):
 
 
 class ChangePasswordView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAdministrador]
 
     def post(self, request):
         serializer = ChangePasswordSerializer(

@@ -21,7 +21,7 @@ https://backend.example.com/api/inventario/public/productos/
 
 - Formato de entrada y salida: JSON.
 - Todas las rutas terminan en `/`.
-- Autenticacion global: por defecto, todo endpoint requiere JWT, porque `REST_FRAMEWORK.DEFAULT_PERMISSION_CLASSES` usa `IsAuthenticated`.
+- Autenticacion global: por defecto, todo endpoint privado requiere JWT y rol `Administrador`, porque `REST_FRAMEWORK.DEFAULT_PERMISSION_CLASSES` usa `IsAdministrador`.
 - Excepciones publicas: los endpoints con `AllowAny` se pueden consumir sin token.
 - Header para endpoints privados:
 
@@ -39,6 +39,7 @@ Content-Type: application/json
 | `204 No Content` | Accion completada sin cuerpo de respuesta. |
 | `400 Bad Request` | Datos invalidos o faltantes. |
 | `401 Unauthorized` | Falta token JWT, token invalido o expirado. |
+| `403 Forbidden` | Usuario autenticado sin rol `Administrador` para un endpoint privado. |
 | `404 Not Found` | Recurso inexistente. |
 | `405 Method Not Allowed` | Metodo HTTP no soportado por esa ruta. |
 
@@ -246,7 +247,7 @@ Notas:
 
 ### `POST /api/usuarios/auth/logout/`
 
-Privado. Requiere JWT. Revoca un refresh token.
+Privado. Requiere JWT y rol `Administrador`. Revoca un refresh token.
 
 Body:
 
@@ -270,13 +271,13 @@ Errores:
 
 ### `GET /api/usuarios/me/`
 
-Privado. Devuelve el usuario autenticado.
+Privado. Requiere JWT y rol `Administrador`. Devuelve el usuario autenticado.
 
 Respuesta `200`: `UsuarioSerializer`.
 
 ### `PATCH /api/usuarios/me/`
 
-Privado. Actualiza parcialmente el perfil.
+Privado. Requiere JWT y rol `Administrador`. Actualiza parcialmente el perfil.
 
 Campos editables:
 
@@ -303,11 +304,11 @@ Respuesta `200`: usuario actualizado.
 
 ### `PUT /api/usuarios/me/`
 
-Privado. Actualizacion completa del perfil. Debe enviar los campos requeridos por el serializer para una actualizacion completa. En frontend se recomienda usar `PATCH`.
+Privado. Requiere JWT y rol `Administrador`. Actualizacion completa del perfil. Debe enviar los campos requeridos por el serializer para una actualizacion completa. En frontend se recomienda usar `PATCH`.
 
 ### `POST /api/usuarios/auth/change-password/`
 
-Privado. Cambia la contrasena del usuario autenticado.
+Privado. Requiere JWT y rol `Administrador`. Cambia la contrasena del usuario autenticado.
 
 Body:
 
@@ -409,7 +410,7 @@ Para la tienda publica, usar solo:
 
 Estos no requieren JWT.
 
-Para panel administrativo o frontend autenticado, usar los endpoints privados del router:
+Para panel administrativo o frontend autenticado como `Administrador`, usar los endpoints privados del router:
 
 - `/api/inventario/ingredientes/`
 - `/api/inventario/productos/`
@@ -418,7 +419,7 @@ Para panel administrativo o frontend autenticado, usar los endpoints privados de
 - `/api/inventario/movimientos-producto/`
 - `/api/inventario/producciones/`
 
-Todos los privados requieren JWT por la configuracion global. Actualmente no hay permiso por rol aplicado en estas vistas; cualquier usuario autenticado podria llamar estos endpoints si tiene token valido. Si el frontend tiene panel admin, debe filtrar por `user.rol`, pero la restriccion fuerte deberia agregarse tambien en backend.
+Todos los privados requieren JWT y rol `Administrador` por la configuracion global.
 
 ## Campos de Inventario
 
@@ -583,7 +584,7 @@ Uso recomendado:
 
 ## Endpoints Privados de Inventario - Router
 
-Los siguientes endpoints son generados por `DefaultRouter` para cada recurso. Todos requieren JWT.
+Los siguientes endpoints son generados por `DefaultRouter` para cada recurso. Todos requieren JWT y rol `Administrador`.
 
 ### Patron de rutas ViewSet
 
@@ -764,7 +765,7 @@ Limitacion actual:
 
 ### `GET /api/inventario/producciones/`
 
-Privado. Lista producciones ordenadas por `fecha_creacion` descendente.
+Privado. Requiere JWT y rol `Administrador`. Lista producciones ordenadas por `fecha_creacion` descendente.
 
 Respuesta `200`:
 
@@ -782,7 +783,7 @@ Respuesta `200`:
 
 ### `POST /api/inventario/producciones/`
 
-Privado. Crea una produccion y actualiza inventario en una transaccion.
+Privado. Requiere JWT y rol `Administrador`. Crea una produccion y actualiza inventario en una transaccion.
 
 Body:
 
@@ -924,7 +925,7 @@ Usar:
 
 No enviar JWT en endpoints publicos; no lo necesitan.
 
-### Cliente Autenticado
+### Administrador Autenticado
 
 Usar:
 
@@ -936,7 +937,7 @@ Usar:
 
 ### Panel Administrativo Frontend
 
-Usar endpoints privados de inventario con JWT:
+Usar endpoints privados de inventario con JWT de un usuario con rol `Administrador`:
 
 - CRUD de ingredientes.
 - CRUD de productos.
@@ -953,7 +954,7 @@ Evitar:
 
 Estos puntos no bloquean el consumo actual, pero son importantes para planificacion:
 
-- Los endpoints privados de inventario no aplican permisos por rol; solo exigen autenticacion.
+- Los endpoints privados ya exigen rol `Administrador`; aun no hay permisos granulares por accion.
 - No hay API implementada para ventas/carrito/pedidos.
 - No hay API implementada para creditos.
 - No hay API implementada para notificaciones.

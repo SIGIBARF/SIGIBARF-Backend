@@ -17,6 +17,8 @@ from apps.inventario.models import (
     Producto,
     ProductoIngrediente,
 )
+from apps.usuarios.models import Rol, Usuario
+from apps.usuarios.permissions import ROLE_ADMINISTRADOR, ROLE_CLIENTE
 
 
 class ProductoPublicAPIViewTest(APITestCase):
@@ -43,6 +45,46 @@ class ProductoPublicAPIViewTest(APITestCase):
         self.assertEqual(len(response.data), 1)
         self.assertEqual(response.data[0]["id"], producto_habilitado.id)
         self.assertFalse(response.data[0]["inhabilitado"])
+
+
+class InventarioPrivatePermissionTest(APITestCase):
+
+    def setUp(self):
+        rol_cliente = Rol.objects.create(nombre=ROLE_CLIENTE)
+        rol_admin = Rol.objects.create(nombre=ROLE_ADMINISTRADOR)
+        self.cliente = Usuario.objects.create_user(
+            correo="cliente@example.com",
+            password="password123",
+            nombre="Cliente",
+            apellido="Prueba",
+            rol=rol_cliente,
+        )
+        self.admin = Usuario.objects.create_user(
+            correo="admin@example.com",
+            password="password123",
+            nombre="Admin",
+            apellido="Prueba",
+            rol=rol_admin,
+        )
+
+    def test_endpoint_privado_requiere_autenticacion(self):
+        response = self.client.get("/api/inventario/productos/")
+
+        self.assertEqual(response.status_code, 401)
+
+    def test_endpoint_privado_rechaza_cliente(self):
+        self.client.force_authenticate(user=self.cliente)
+
+        response = self.client.get("/api/inventario/productos/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_endpoint_privado_permite_administrador(self):
+        self.client.force_authenticate(user=self.admin)
+
+        response = self.client.get("/api/inventario/productos/")
+
+        self.assertEqual(response.status_code, 200)
 
 
 class ProduccionStockTest(TestCase):
