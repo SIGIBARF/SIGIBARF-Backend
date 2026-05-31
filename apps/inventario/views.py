@@ -8,6 +8,7 @@ from django.core.exceptions import ValidationError
 from . import serializers
 from . import services
 from . import models
+from django.db import transaction
 
 
 class IngredienteViewSet(viewsets.ModelViewSet):
@@ -28,6 +29,32 @@ class ProductoIngredienteViewSet(viewsets.ModelViewSet):
 class MovimientoIngredienteViewSet(viewsets.ModelViewSet):
     queryset = models.MovimientoIngrediente.objects.all()
     serializer_class = serializers.MovimientoIngredienteSerializer
+
+    def perform_create(self, serializer):
+        with transaction.atomic():
+            id_ingrediente = serializer.validated_data['id_ingrediente'].id
+            ingrediente = models.Ingrediente.objects.select_for_update().get(pk=id_ingrediente)
+            stock_anterior = ingrediente.stock_actual
+            cantidad = serializer.validated_data['cantidad']
+            tipo = serializer.validated_data['tipo_movimiento']
+
+            if tipo == 'ENTRADA':
+                stock_posterior = stock_anterior + cantidad
+                ingrediente.stock_actual = stock_posterior
+            elif tipo == 'SALIDA':
+                if cantidad > stock_anterior:
+                    raise rest_serializers.ValidationError('Stock insuficiente para realizar la salida.')
+                stock_posterior = stock_anterior - cantidad
+                ingrediente.stock_actual = stock_posterior
+            elif tipo == 'AJUSTE':
+                stock_posterior = cantidad
+                ingrediente.stock_actual = stock_posterior
+            else:
+                raise rest_serializers.ValidationError('tipo_movimiento inválido.')
+
+            ingrediente.save()
+
+            serializer.save(stock_anterior=stock_anterior, stock_posterior=stock_posterior)
 
 
 class MovimientoProductoViewSet(viewsets.ModelViewSet):
