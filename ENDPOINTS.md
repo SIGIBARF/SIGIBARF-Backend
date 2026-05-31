@@ -960,3 +960,87 @@ Estos puntos no bloquean el consumo actual, pero son importantes para planificac
 - No hay API implementada para notificaciones.
 - Los endpoints de movimientos permiten rutas de creacion por `ModelViewSet`, pero no tienen logica de actualizacion de stock fuera de produccion.
 - Los endpoints de listado no tienen paginacion, filtros ni busqueda configurados.
+# Documentación de API: Módulo de Notificaciones 🔔
+
+Este módulo está restringido. **Solo los usuarios autenticados con el rol de `Administrador`** pueden acceder a estos endpoints. Si un usuario sin rol de administrador hace la solicitud, recibirá una lista vacía `[]`.
+
+---
+
+## 1. Listar Notificaciones Activas
+
+Obtiene la lista de todas las alertas actuales que requieren la atención del administrador y que no han sido resueltas. 
+*(Nota: El backend agrupa automáticamente notificaciones recurrentes del mismo problema, actualizando su fecha y mostrándolas siempre de primeras).*
+
+- **Método**: `GET`
+- **URL**: `/api/notificaciones/`
+- **Headers**:
+  - `Authorization: Bearer <token>`
+
+### Respuesta Exitosa (`200 OK`)
+
+```json
+[
+  {
+    "id": 15,
+    "tipo": "stock_producto",
+    "tipo_display": "Stock Producto",
+    "mensaje": "El producto 'Carne Premium' tiene stock bajo (2). Mínimo: 10.",
+    "leida": false,
+    "fecha_generada": "2026-05-31T12:20:00Z",
+    "fecha_leida": null,
+    "source_type": "producto",
+    "source_id": 42
+  },
+  {
+    "id": 16,
+    "tipo": "deuda_vencida",
+    "tipo_display": "Deuda Vencida",
+    "mensaje": "El crédito #120 tiene una cuota vencida.",
+    "leida": false,
+    "fecha_generada": "2026-05-31T10:15:00Z",
+    "fecha_leida": null,
+    "source_type": "credito",
+    "source_id": 120
+  }
+]
+```
+
+> [!TIP]
+> **Sobre `source_type` y `source_id`**: Utilicen estos campos dinámicos para saber a qué módulo redirigir al usuario cuando haga clic en la notificación. Por ejemplo, si `source_type` es `"producto"`, lo redirigen a la vista de detalles del producto con ID `42`.
+
+---
+
+## 2. Resolver/Marcar como Leída una Notificación
+
+Marca una alerta específica como resuelta (`leida = true`). Desaparecerá de la lista principal de alertas activas. 
+*(Nota: Si el problema de fondo en el backend no se soluciona, por ejemplo no se reabastece el stock, el backend podría volver a marcarla como "no leída" automáticamente al día siguiente).*
+
+- **Método**: `PATCH`
+- **URL**: `/api/notificaciones/<id>/resolve/`
+- **Headers**:
+  - `Authorization: Bearer <token>`
+
+### Ejemplo de Petición
+
+```http
+PATCH /api/notificaciones/15/resolve/
+```
+No se requiere body en la petición.
+
+### Respuesta Exitosa (`200 OK`)
+
+```json
+{
+  "status": "Notificación resuelta"
+}
+```
+
+---
+
+## Tipos de Notificaciones Soportadas (`tipo`)
+Actualmente el sistema puede devolver los siguientes tipos en el campo `tipo`:
+- `"stock_producto"`
+- `"stock_ingrediente"`
+- `"vencimiento_producto"`
+- `"deuda_vencida"`
+- `"deuda_proxima"`
