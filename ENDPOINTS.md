@@ -444,7 +444,7 @@ Todos los privados requieren JWT y rol `Administrador` por la configuracion glob
 | `stock_actual` |                                 integer | Si | Si | Minimo `0`.                                                                                                |
 | `stock_minimo` |                                 integer | Si | Si | Minimo `0`.                                                                                                |
 | `inhabilitado` |                                 boolean | No | Si | Default `false`. El endpoint publico de productos solo devuelve registros con `inhabilitado=false`.        |
-| `Descripción`  |                          campo de texto | No | Si | Campo para anotar la descripción del producto, estas se encuentran en el catalogo de ventas de la empresa. |
+| `descripcion`  |                          campo de texto | No | Si | Campo opcional para describir el producto en el catalogo. Puede ser `null` o texto vacio.                 |
 | `ingredientes` |                            array de IDs | No | Si | ManyToMany through `ProductoIngrediente`; normalmente administrar desde `producto-ingredientes`.           |
 
 ### ProductoIngrediente
@@ -486,13 +486,21 @@ Al crear una produccion con `POST /api/inventario/producciones/`, el backend:
 | `id` | integer | No | Autogenerado. |
 | `id_ingrediente` | integer | Si | Ingrediente existente. |
 | `tipo_movimiento` | string | Si | Opciones: `ENTRADA`, `SALIDA`, `AJUSTE`. |
-| `stock_anterior` | decimal string | No | Solo lectura en serializer. |
-| `stock_posterior` | decimal string | No | Solo lectura en serializer. |
+| `stock_anterior` | decimal string | No | Solo lectura; se calcula automaticamente al crear el movimiento. |
+| `stock_posterior` | decimal string | No | Solo lectura; se calcula automaticamente al crear el movimiento. |
 | `cantidad` | decimal string | Si | Debe ser `> 0`. |
 | `fecha` | date/datetime | No | Solo lectura; se genera automaticamente. |
 | `comentarios` | string/null | No | Texto opcional. |
 
-Advertencia: aunque existe ViewSet de movimientos, el serializer marca stocks como solo lectura y no hay servicio que calcule `stock_anterior`/`stock_posterior` en creacion directa. Para movimientos generados por produccion, usar `POST /api/inventario/producciones/`.
+Al crear un movimiento manual, el backend bloquea el ingrediente con `select_for_update`, calcula los stocks y actualiza `Ingrediente.stock_actual` en la misma transaccion.
+
+Comportamiento por `tipo_movimiento`:
+
+- `ENTRADA`: suma `cantidad` al stock actual.
+- `SALIDA`: resta `cantidad`; si no hay stock suficiente responde `400`.
+- `AJUSTE`: establece `stock_actual = cantidad`.
+
+Los movimientos son historiales: se pueden listar, consultar y crear, pero no editar ni eliminar por API.
 
 ### MovimientoProducto
 
@@ -501,13 +509,21 @@ Advertencia: aunque existe ViewSet de movimientos, el serializer marca stocks co
 | `id` | integer | No | Autogenerado. |
 | `id_producto` | integer | Si | Producto existente. |
 | `tipo_movimiento` | string | Si | Opciones: `ENTRADA`, `SALIDA`, `AJUSTE`. |
-| `stock_anterior` | integer | No | Solo lectura en serializer. |
-| `stock_posterior` | integer | No | Solo lectura en serializer. |
+| `stock_anterior` | integer | No | Solo lectura; se calcula automaticamente al crear el movimiento. |
+| `stock_posterior` | integer | No | Solo lectura; se calcula automaticamente al crear el movimiento. |
 | `cantidad` | integer | Si | Minimo `1`. |
 | `fecha` | date/datetime | No | Solo lectura; se genera automaticamente. |
 | `comentarios` | string/null | No | Texto opcional. |
 
-Advertencia: igual que `MovimientoIngrediente`, la creacion directa no calcula stocks. Para entrada por produccion, usar `POST /api/inventario/producciones/`.
+Al crear un movimiento manual, el backend bloquea el producto con `select_for_update`, calcula los stocks y actualiza `Producto.stock_actual` en la misma transaccion.
+
+Comportamiento por `tipo_movimiento`:
+
+- `ENTRADA`: suma `cantidad` al stock actual.
+- `SALIDA`: resta `cantidad`; si no hay stock suficiente responde `400`.
+- `AJUSTE`: establece `stock_actual = cantidad`.
+
+Los movimientos son historiales: se pueden listar, consultar y crear, pero no editar ni eliminar por API.
 
 ## Endpoints Publicos de Tienda
 
@@ -526,6 +542,7 @@ Respuesta `200`:
     "stock_actual": 10,
     "stock_minimo": 2,
     "inhabilitado": false,
+    "descripcion": "Producto demo para catalogo",
     "ingredientes": [1, 2]
   }
 ]
@@ -588,7 +605,7 @@ Los siguientes endpoints son generados por `DefaultRouter` para cada recurso. To
 
 ### Patron de rutas ViewSet
 
-Para cada recurso:
+Para recursos CRUD (`ingredientes`, `productos`, `producto-ingredientes`):
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
@@ -598,6 +615,17 @@ Para cada recurso:
 | `PUT` | `/api/inventario/<recurso>/<id>/` | Reemplazar completo. |
 | `PATCH` | `/api/inventario/<recurso>/<id>/` | Actualizar parcial. |
 | `DELETE` | `/api/inventario/<recurso>/<id>/` | Eliminar. |
+
+Para recursos de historial (`movimientos-ingrediente`, `movimientos-producto`):
+
+| Metodo | Ruta | Descripcion |
+|---|---|---|
+| `GET` | `/api/inventario/<recurso>/` | Listar historico. |
+| `POST` | `/api/inventario/<recurso>/` | Crear movimiento y actualizar stock. |
+| `GET` | `/api/inventario/<recurso>/<id>/` | Obtener detalle. |
+| `PUT` | `/api/inventario/<recurso>/<id>/` | No permitido; responde `405`. |
+| `PATCH` | `/api/inventario/<recurso>/<id>/` | No permitido; responde `405`. |
+| `DELETE` | `/api/inventario/<recurso>/<id>/` | No permitido; responde `405`. |
 
 Recursos disponibles:
 
@@ -639,6 +667,16 @@ Validaciones:
 
 Actualiza parcialmente cualquier campo enviado.
 
+#### `DELETE /api/inventario/ingredientes/<id>/`
+
+Elimina el ingrediente si no tiene registros protegidos relacionados.
+
+Si existen movimientos de ingrediente u otras referencias protegidas, responde `400` y no elimina el registro:
+
+```json
+{"detail": "No se puede eliminar porque existen registros relacionados."}
+```
+
 ### Productos Privado
 
 Base: `/api/inventario/productos/`
@@ -657,7 +695,8 @@ Body:
   "precio": "12000.00",
   "stock_actual": 10,
   "stock_minimo": 2,
-  "inhabilitado": false
+  "inhabilitado": false,
+  "descripcion": "Producto demo para catalogo"
 }
 ```
 
@@ -669,6 +708,7 @@ Validaciones:
 - `precio` debe ser decimal `> 0`.
 - `stock_actual` y `stock_minimo` deben ser enteros `>= 0`.
 - `inhabilitado` es opcional; default `false`.
+- `descripcion` es opcional; puede ser texto, `null` o cadena vacia.
 
 #### `PATCH /api/inventario/productos/<id>/`
 
@@ -678,6 +718,16 @@ Actualiza parcialmente un producto. Ejemplo para inhabilitar:
 {
   "inhabilitado": true
 }
+```
+
+#### `DELETE /api/inventario/productos/<id>/`
+
+Elimina el producto si no tiene registros protegidos relacionados.
+
+Si existen producciones, movimientos de producto u otras referencias protegidas, responde `400` y no elimina el registro:
+
+```json
+{"detail": "No se puede eliminar porque existen registros relacionados."}
 ```
 
 ### Producto-Ingredientes Privado
@@ -713,13 +763,17 @@ Base: `/api/inventario/movimientos-ingrediente/`
 
 #### `GET /api/inventario/movimientos-ingrediente/`
 
-Lista movimientos.
+Lista el historico de movimientos de ingredientes.
+
+#### `GET /api/inventario/movimientos-ingrediente/<id>/`
+
+Obtiene el detalle de un movimiento de ingrediente.
 
 #### `POST /api/inventario/movimientos-ingrediente/`
 
-No recomendado para flujo de produccion. Usar `POST /api/inventario/producciones/`.
+Crear un movimiento manual de ingrediente y actualiza `Ingrediente.stock_actual`.
 
-Body teorico:
+Body:
 
 ```json
 {
@@ -730,9 +784,43 @@ Body teorico:
 }
 ```
 
-Limitacion actual:
+Efectos:
 
-- `stock_anterior` y `stock_posterior` son solo lectura en serializer, pero obligatorios en base de datos. La creacion directa puede fallar si no se implementa servicio de ajuste manual.
+- Calcula `stock_anterior` desde el ingrediente.
+- Calcula `stock_posterior` segun `tipo_movimiento`.
+- Guarda el nuevo `stock_actual` del ingrediente.
+- Guarda el movimiento con ambos stocks calculados.
+
+Validaciones:
+
+- `cantidad` debe ser decimal `> 0`.
+- `tipo_movimiento` debe ser `ENTRADA`, `SALIDA` o `AJUSTE`.
+- En `SALIDA`, si `cantidad > stock_actual`, responde `400`:
+
+```json
+["Stock insuficiente para realizar la salida."]
+```
+
+Respuesta `201`:
+
+```json
+{
+  "id": 1,
+  "stock_anterior": "100.00",
+  "stock_posterior": "97.50",
+  "cantidad": "2.50",
+  "fecha": "2026-05-24T13:30:00Z",
+  "tipo_movimiento": "SALIDA",
+  "comentarios": "Ajuste manual",
+  "id_ingrediente": 1
+}
+```
+
+Metodos no permitidos:
+
+- `PUT /api/inventario/movimientos-ingrediente/<id>/` responde `405`.
+- `PATCH /api/inventario/movimientos-ingrediente/<id>/` responde `405`.
+- `DELETE /api/inventario/movimientos-ingrediente/<id>/` responde `405`.
 
 ### Movimientos de Producto Privado
 
@@ -740,13 +828,17 @@ Base: `/api/inventario/movimientos-producto/`
 
 #### `GET /api/inventario/movimientos-producto/`
 
-Lista movimientos.
+Lista el historico de movimientos de productos.
+
+#### `GET /api/inventario/movimientos-producto/<id>/`
+
+Obtiene el detalle de un movimiento de producto.
 
 #### `POST /api/inventario/movimientos-producto/`
 
-No recomendado para flujo de produccion. Usar `POST /api/inventario/producciones/`.
+Crear un movimiento manual de producto y actualiza `Producto.stock_actual`.
 
-Body teorico:
+Body:
 
 ```json
 {
@@ -757,9 +849,43 @@ Body teorico:
 }
 ```
 
-Limitacion actual:
+Efectos:
 
-- `stock_anterior` y `stock_posterior` son solo lectura en serializer, pero obligatorios en base de datos. La creacion directa puede fallar si no se implementa servicio de ajuste manual.
+- Calcula `stock_anterior` desde el producto.
+- Calcula `stock_posterior` segun `tipo_movimiento`.
+- Guarda el nuevo `stock_actual` del producto.
+- Guarda el movimiento con ambos stocks calculados.
+
+Validaciones:
+
+- `cantidad` debe ser entero `>= 1`.
+- `tipo_movimiento` debe ser `ENTRADA`, `SALIDA` o `AJUSTE`.
+- En `SALIDA`, si `cantidad > stock_actual`, responde `400`:
+
+```json
+["Stock insuficiente para realizar la salida."]
+```
+
+Respuesta `201`:
+
+```json
+{
+  "id": 1,
+  "stock_anterior": 10,
+  "stock_posterior": 15,
+  "cantidad": 5,
+  "fecha": "2026-05-24T13:30:00Z",
+  "tipo_movimiento": "ENTRADA",
+  "comentarios": "Ajuste manual",
+  "id_producto": 1
+}
+```
+
+Metodos no permitidos:
+
+- `PUT /api/inventario/movimientos-producto/<id>/` responde `405`.
+- `PATCH /api/inventario/movimientos-producto/<id>/` responde `405`.
+- `DELETE /api/inventario/movimientos-producto/<id>/` responde `405`.
 
 ## Producciones
 
@@ -943,11 +1069,13 @@ Usar endpoints privados de inventario con JWT de un usuario con rol `Administrad
 - CRUD de productos.
 - CRUD de producto-ingredientes.
 - `POST /api/inventario/producciones/` para producir y mover stock correctamente.
+- `POST /api/inventario/movimientos-ingrediente/` para ajustes manuales de stock de ingredientes.
+- `POST /api/inventario/movimientos-producto/` para ajustes manuales de stock de productos.
 - `GET /api/inventario/movimientos-ingrediente/` y `GET /api/inventario/movimientos-producto/` para historicos.
 
 Evitar:
 
-- Crear movimientos manualmente hasta que exista un servicio backend para calcular stocks.
+- Editar o eliminar movimientos: son historiales y la API responde `405`.
 - Usar los endpoints publicos para administracion, porque ocultan o simplifican informacion.
 
 ## Pendientes Tecnicos Detectados
@@ -958,7 +1086,7 @@ Estos puntos no bloquean el consumo actual, pero son importantes para planificac
 - No hay API implementada para ventas/carrito/pedidos.
 - No hay API implementada para creditos.
 - No hay API implementada para notificaciones.
-- Los endpoints de movimientos permiten rutas de creacion por `ModelViewSet`, pero no tienen logica de actualizacion de stock fuera de produccion.
+- Los endpoints de movimientos no tienen filtros ni busqueda configurados; solo listan, crean y consultan detalle.
 - Los endpoints de listado no tienen paginacion, filtros ni busqueda configurados.
 # Documentación de API: Módulo de Notificaciones 🔔
 
