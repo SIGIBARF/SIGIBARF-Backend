@@ -94,7 +94,7 @@ class LoginView(APIView):
 
 
 class LogoutView(APIView):
-    permission_classes = [IsAdministrador]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         refresh = request.data.get('refresh')
@@ -115,7 +115,7 @@ class LogoutView(APIView):
 
 class PerfilView(generics.RetrieveUpdateAPIView):
     serializer_class = UsuarioSerializer
-    permission_classes = [IsAdministrador]
+    permission_classes = [IsAuthenticated]
 
     def get_object(self):
         return self.request.user
@@ -133,7 +133,7 @@ class RefreshTokenView(TokenRefreshView):
 
 
 class ChangePasswordView(APIView):
-    permission_classes = [IsAdministrador]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request):
         serializer = ChangePasswordSerializer(
