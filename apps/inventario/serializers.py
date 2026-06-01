@@ -44,7 +44,8 @@ class ProductoIngredienteSerializer(serializers.ModelSerializer):
 
 class ProduccionSerializer(serializers.ModelSerializer):
     cantidad_producida = serializers.IntegerField(min_value=1)
-    fecha = serializers.DateField(read_only=True)
+    fecha_creacion = serializers.DateTimeField(read_only=True)
+    fecha_vencimiento = serializers.DateTimeField(required=True, allow_null=False, input_formats=['iso-8601', '%Y-%m-%d'])
 
     class Meta:
         model = models.Produccion
@@ -59,7 +60,7 @@ class MovimientoIngredienteSerializer(serializers.ModelSerializer):
         decimal_places=2,
         validators=[my_validators.validate_positive_decimal_gt_zero],
     )
-    fecha = serializers.DateField(read_only=True)
+    fecha = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = models.MovimientoIngrediente
@@ -70,7 +71,7 @@ class MovimientoProductoSerializer(serializers.ModelSerializer):
     stock_anterior = serializers.IntegerField(read_only=True)
     stock_posterior = serializers.IntegerField(read_only=True)
     cantidad = serializers.IntegerField(min_value=1)
-    fecha = serializers.DateField(read_only=True)
+    fecha = serializers.DateTimeField(read_only=True)
 
     class Meta:
         model = models.MovimientoProducto

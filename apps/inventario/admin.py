@@ -42,8 +42,8 @@ class ProductoIngredienteAdmin(admin.ModelAdmin):
 @admin.register(models.Produccion)
 class ProduccionAdmin(admin.ModelAdmin):
     form = ProduccionAdminForm
-    list_display = ('id', 'id_producto', 'cantidad_producida', 'fecha')
-    readonly_fields = ('fecha',)
+    list_display = ('id', 'id_producto', 'cantidad_producida', 'fecha_creacion', 'fecha_vencimiento')
+    readonly_fields = ('fecha_creacion',)
 
     def save_model(self, request, obj, form, change):
         if change:
@@ -54,6 +54,7 @@ class ProduccionAdmin(admin.ModelAdmin):
             produccion = services.crear_produccion(
                 id_producto=obj.id_producto_id,
                 cantidad_producida=obj.cantidad_producida,
+                fecha_vencimiento=obj.fecha_vencimiento,
             )
         except ValidationError as exc:
             message = getattr(exc, 'message', None) or '; '.join(exc.messages)
@@ -62,7 +63,8 @@ class ProduccionAdmin(admin.ModelAdmin):
 
         obj.pk = produccion.pk
         obj.id = produccion.id
-        obj.fecha = produccion.fecha
+        obj.fecha_creacion = produccion.fecha_creacion
+        obj.fecha_vencimiento = produccion.fecha_vencimiento
         obj.id_producto = produccion.id_producto
         obj._state.adding = False
 

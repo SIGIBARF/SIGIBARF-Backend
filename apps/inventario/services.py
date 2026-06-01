@@ -4,9 +4,11 @@ from django.core.exceptions import ValidationError
 from . import models
 
 
-def crear_produccion(id_producto, cantidad_producida):
+def crear_produccion(id_producto, cantidad_producida, fecha_vencimiento):
     if cantidad_producida <= 0:
         raise ValidationError('cantidad_producida debe ser mayor que 0')
+    if fecha_vencimiento is None:
+        raise ValidationError('fecha_vencimiento es requerida')
 
     with transaction.atomic():
         # traer el producto (select for update para que no se edite el producto durante la produccion)
@@ -51,6 +53,7 @@ def crear_produccion(id_producto, cantidad_producida):
         produccion = models.Produccion.objects.create(
             id_producto=producto,
             cantidad_producida=cantidad_producida,
+            fecha_vencimiento=fecha_vencimiento,
         )
 
         return produccion

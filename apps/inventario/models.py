@@ -77,7 +77,8 @@ class Produccion(models.Model):
     id = models.AutoField(primary_key=True)
     id_producto = models.ForeignKey(Producto, on_delete=models.PROTECT)
     cantidad_producida = models.PositiveIntegerField()
-    fecha = models.DateTimeField(auto_now_add=True)
+    fecha_creacion = models.DateTimeField(auto_now_add=True)
+    fecha_vencimiento = models.DateTimeField(null=True)
     
     class Meta:
         db_table = 'produccion'

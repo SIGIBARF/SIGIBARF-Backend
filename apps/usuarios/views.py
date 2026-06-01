@@ -10,7 +10,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.usuarios.models import Usuario
-from apps.usuarios.permissions import get_user_role_name
+from apps.usuarios.permissions import IsAdministrador, get_user_role_name
 from apps.usuarios.serializers import (
     ChangePasswordSerializer,
     ConfirmResetPasswordSerializer,
