@@ -1,14 +1,15 @@
-# Documentacion de Endpoints - SIGIBARF Backend
+# Documentación de Endpoints - SIGIBARF Backend
 
-Esta documentacion describe los endpoints expuestos actualmente por el proyecto. La base de rutas esta definida en `project/urls.py`.
+Este archivo documenta las rutas expuestas por el backend Django/DRF. La fuente de verdad de montaje de rutas está en `project/urls.py`.
 
 ## Base URL
 
-En desarrollo o produccion, anteponer el host correspondiente:
+Rutas montadas actualmente:
 
 ```txt
 {API_BASE_URL}/api/usuarios/
 {API_BASE_URL}/api/inventario/
+{API_BASE_URL}/api/notificaciones/
 ```
 
 Ejemplo:
@@ -21,53 +22,107 @@ https://backend.example.com/api/inventario/public/productos/
 
 - Formato de entrada y salida: JSON.
 - Todas las rutas terminan en `/`.
-- Autenticacion global: por defecto, todo endpoint privado requiere JWT y rol `Administrador`, porque `REST_FRAMEWORK.DEFAULT_PERMISSION_CLASSES` usa `IsAdministrador`.
-- Excepciones publicas: los endpoints con `AllowAny` se pueden consumir sin token.
-- Header para endpoints privados:
+- Autenticación API: JWT por header `Authorization: Bearer <access_token>`.
+- Los endpoints públicos declaran `AllowAny` y no requieren token.
+- Los endpoints privados de inventario usan el permiso global `IsAdministrador`.
+- `IsAdministrador` permite usuarios con rol de negocio `Administrador`; también permite `is_staff` o `is_superuser` por implementación de permisos.
+- Algunos endpoints de usuario son privados pero solo requieren usuario autenticado, no rol `Administrador`.
+- Los listados no tienen paginación, búsqueda ni filtros configurados, salvo endpoints específicos documentados.
+- Las fechas se serializan como ISO 8601. El proyecto usa `USE_TZ=True` y `TIME_ZONE="UTC"` en `settings.py`.
+
+Header recomendado para endpoints privados:
 
 ```http
 Authorization: Bearer <access_token>
 Content-Type: application/json
 ```
 
-## Codigos de Estado Comunes
+## Códigos de Estado Comunes
 
-| Codigo | Significado |
+| Código | Significado |
 |---|---|
-| `200 OK` | Consulta o accion completada. |
+| `200 OK` | Consulta o acción completada. |
 | `201 Created` | Recurso creado. |
-| `204 No Content` | Accion completada sin cuerpo de respuesta. |
-| `400 Bad Request` | Datos invalidos o faltantes. |
-| `401 Unauthorized` | Falta token JWT, token invalido o expirado. |
-| `403 Forbidden` | Usuario autenticado sin rol `Administrador` para un endpoint privado. |
-| `404 Not Found` | Recurso inexistente. |
-| `405 Method Not Allowed` | Metodo HTTP no soportado por esa ruta. |
+| `204 No Content` | Acción completada sin cuerpo de respuesta. |
+| `400 Bad Request` | Datos inválidos o faltantes. |
+| `401 Unauthorized` | Falta token JWT, token inválido o token expirado. |
+| `403 Forbidden` | Usuario autenticado sin permiso para la ruta. |
+| `404 Not Found` | Recurso inexistente o no visible para el usuario autenticado. |
+| `405 Method Not Allowed` | Método HTTP no soportado por esa ruta. |
 
-## Autenticacion y Usuarios
+## Resumen de Rutas
+
+### Usuarios
+
+| Método | Ruta | Acceso | Descripción |
+|---|---|---|---|
+| `GET` | `/api/usuarios/health/` | Público | Health check. |
+| `POST` | `/api/usuarios/auth/register/` | Público | Registro de cliente. |
+| `POST` | `/api/usuarios/auth/login/` | Público | Login con correo y contraseña. |
+| `POST` | `/api/usuarios/auth/google/` | Público | Login/registro con Google. |
+| `POST` | `/api/usuarios/auth/refresh/` | Público | Renovar token. |
+| `POST` | `/api/usuarios/auth/password-reset/` | Público | Solicitar restablecimiento de contraseña. |
+| `GET` | `/api/usuarios/auth/password-reset/confirm/<uidb64>/<token>/` | Público | Validar token de restablecimiento. |
+| `POST` | `/api/usuarios/auth/password-reset/confirm/<uidb64>/<token>/` | Público | Restablecer contraseña. |
+| `POST` | `/api/usuarios/auth/logout/` | Autenticado | Revocar refresh token. |
+| `GET` | `/api/usuarios/me/` | Autenticado | Obtener perfil propio. |
+| `PUT` | `/api/usuarios/me/` | Autenticado | Actualizar perfil completo. |
+| `PATCH` | `/api/usuarios/me/` | Autenticado | Actualizar perfil parcial. |
+| `POST` | `/api/usuarios/auth/change-password/` | Autenticado | Cambiar contraseña. |
+
+### Inventario
+
+| Método | Ruta | Acceso | Descripción |
+|---|---|---|---|
+| `GET` | `/api/inventario/public/productos/` | Público | Productos habilitados para tienda. |
+| `GET` | `/api/inventario/public/ingredientes/` | Público | Ingredientes sin proveedor. |
+| `GET` | `/api/inventario/public/producto-ingredientes/` | Público | Relaciones producto-ingrediente. |
+| `GET/POST` | `/api/inventario/ingredientes/` | Admin | Listar o crear ingredientes. |
+| `GET/PUT/PATCH/DELETE` | `/api/inventario/ingredientes/<id>/` | Admin | Detalle, actualización o eliminación. |
+| `GET/POST` | `/api/inventario/productos/` | Admin | Listar o crear productos. |
+| `GET/PUT/PATCH/DELETE` | `/api/inventario/productos/<id>/` | Admin | Detalle, actualización o eliminación. |
+| `GET/POST` | `/api/inventario/producto-ingredientes/` | Admin | Listar o crear relaciones. |
+| `GET/PUT/PATCH/DELETE` | `/api/inventario/producto-ingredientes/<id>/` | Admin | Detalle, actualización o eliminación. |
+| `GET/POST` | `/api/inventario/movimientos-ingrediente/` | Admin | Listar historial o crear movimiento. |
+| `GET` | `/api/inventario/movimientos-ingrediente/<id>/` | Admin | Detalle de movimiento. |
+| `GET/POST` | `/api/inventario/movimientos-producto/` | Admin | Listar historial o crear movimiento. |
+| `GET` | `/api/inventario/movimientos-producto/<id>/` | Admin | Detalle de movimiento. |
+| `GET` | `/api/inventario/producciones/` | Admin | Listar producciones. |
+| `POST` | `/api/inventario/producciones/` | Admin | Crear producción y mover stock. |
+| `GET` | `/api/inventario/producciones/proximas-a-vencer/` | Admin | Lotes de producción que vencen entre hoy y un mes calendario. |
+
+### Notificaciones
+
+| Método | Ruta | Acceso | Descripción |
+|---|---|---|---|
+| `GET` | `/api/notificaciones/` | Autenticado, visible para Admin | Lista notificaciones activas no leídas. |
+| `PATCH` | `/api/notificaciones/<id>/resolve/` | Autenticado, visible para Admin | Marca una notificación como leída. |
+
+## Autenticación y Usuarios
 
 Base: `/api/usuarios/`
 
 ### Modelo de Usuario en Respuestas
 
-Este es el formato usado por `UsuarioSerializer`:
+Formato usado por `UsuarioSerializer`:
 
-| Campo | Tipo | Escritura | Descripcion |
+| Campo | Tipo | Escritura | Descripción |
 |---|---:|---|---|
 | `id` | integer | Solo lectura | ID del usuario. |
-| `correo` | email string | Solo lectura en perfil | Correo unico. |
-| `nombre` | string, max 100 | Editable en perfil | Nombre. |
-| `apellido` | string, max 100 | Editable en perfil | Apellido. |
-| `telefono` | string, max 20 | Editable en perfil | Puede estar vacio. |
-| `direccion` | string, max 255 | Editable en perfil | Puede estar vacio. |
+| `correo` | email string | Solo lectura | Correo único. |
+| `nombre` | string, max 100 | Editable | Nombre. |
+| `apellido` | string, max 100 | Editable | Apellido. |
+| `telefono` | string, max 20 | Editable | Puede estar vacío. |
+| `direccion` | string, max 255 | Editable | Puede estar vacío. |
 | `rol` | string | Solo lectura | Nombre del rol: `Cliente` o `Administrador`. |
-| `is_perfil_completo` | boolean | Calculado | En `PATCH/PUT /me/`, queda `true` solo si `telefono` y `direccion` no estan vacios. |
+| `is_perfil_completo` | boolean | Recalculado por backend | Queda `true` solo si `telefono` y `direccion` tienen contenido. |
 | `is_active` | boolean | Solo lectura | Estado de la cuenta. |
-| `created_at` | datetime | Solo lectura | Fecha de creacion. |
-| `updated_at` | datetime | Solo lectura | Ultima actualizacion. |
+| `created_at` | datetime | Solo lectura | Fecha de creación. |
+| `updated_at` | datetime | Solo lectura | Última actualización. |
 
 ### `GET /api/usuarios/health/`
 
-Publico. Sirve para verificar que el backend responde.
+Público. Verifica que el backend responde.
 
 Respuesta `200`:
 
@@ -79,19 +134,19 @@ Respuesta `200`:
 
 ### `POST /api/usuarios/auth/register/`
 
-Publico. Registra un usuario cliente.
+Público. Registra un usuario con rol `Cliente`.
 
 Body:
 
 | Campo | Tipo | Requerido | Validaciones |
 |---|---:|---:|---|
-| `correo` | email string | Si | Debe ser unico, comparado sin distinguir mayusculas/minusculas. |
-| `password` | string | Si | Minimo 8 caracteres y validadores de password de Django. |
-| `password_confirm` | string | Si | Debe coincidir con `password`. |
-| `nombre` | string, max 100 | Si | No vacio. |
-| `apellido` | string, max 100 | Si | No vacio. |
-| `telefono` | string, max 20 | No | Puede enviarse como `""`. Default `""`. |
-| `direccion` | string, max 255 | No | Puede enviarse como `""`. Default `""`. |
+| `correo` | email string | Sí | Debe ser único, comparado sin distinguir mayúsculas/minúsculas. |
+| `password` | string | Sí | Mínimo 8 caracteres y validadores de Django. |
+| `password_confirm` | string | Sí | Debe coincidir con `password`. |
+| `nombre` | string, max 100 | Sí | No vacío. |
+| `apellido` | string, max 100 | Sí | No vacío. |
+| `telefono` | string, max 20 | No | Puede ser `""`. Default `""`. |
+| `direccion` | string, max 255 | No | Puede ser `""`. Default `""`. |
 
 Ejemplo:
 
@@ -111,7 +166,7 @@ Respuesta `201`:
 
 ```json
 {
-  "detail": "Cuenta creada correctamente. Inicia sesion con tu correo y contrasena.",
+  "detail": "Cuenta creada correctamente. Inicia sesión con tu correo y contraseña.",
   "user": {
     "id": 1,
     "correo": "cliente@example.com",
@@ -128,26 +183,26 @@ Respuesta `201`:
 }
 ```
 
-Errores comunes `400`:
+Errores comunes:
 
 ```json
 {"correo": ["Ya existe una cuenta con este correo."]}
 ```
 
 ```json
-{"password_confirm": "Las contrasenas no coinciden."}
+{"password_confirm": "Las contraseñas no coinciden."}
 ```
 
 ### `POST /api/usuarios/auth/login/`
 
-Publico. Inicia sesion con correo y password.
+Público. Inicia sesión con correo y contraseña.
 
 Body:
 
 | Campo | Tipo | Requerido |
 |---|---:|---:|
-| `correo` | email string | Si |
-| `password` | string | Si |
+| `correo` | email string | Sí |
+| `password` | string | Sí |
 
 Respuesta `200`:
 
@@ -176,28 +231,28 @@ Respuesta `200`:
 Notas:
 
 - El `access` dura 1 hora.
-- El `refresh` dura 7 dias.
-- El token incluye el claim `rol` si el usuario tiene rol.
+- El `refresh` dura 7 días.
+- El token incluye el claim `rol` cuando el usuario tiene rol asignado.
 
-Errores comunes `400`:
+Errores comunes:
 
 ```json
-["Correo o contrasena incorrectos."]
+["Correo o contraseña incorrectos."]
 ```
 
 ```json
-["La cuenta esta inactiva."]
+["La cuenta está inactiva."]
 ```
 
 ### `POST /api/usuarios/auth/google/`
 
-Publico. Login o registro por Google.
+Público. Hace login o registro con Google Identity Services.
 
 Body:
 
-| Campo | Tipo | Requerido | Descripcion |
+| Campo | Tipo | Requerido | Descripción |
 |---|---:|---:|---|
-| `id_token` | string | Si | Token de Google Identity Services. |
+| `id_token` | string | Sí | Token emitido por Google. |
 
 Respuesta `200`: igual a login, con `tokens` y `user`.
 
@@ -206,22 +261,22 @@ Restricciones:
 - `GOOGLE_OAUTH_CLIENT_ID` debe estar configurado en el servidor.
 - Google debe devolver correo.
 - El correo de Google debe estar verificado.
-- Si el correo ya existe e `is_active=false`, se rechaza.
+- Si el correo ya existe con `is_active=false`, se rechaza.
 - Si el correo no existe, se crea usuario con rol `Cliente` y password inutilizable.
 
-Errores comunes `400`:
+Errores comunes:
 
 ```json
-["Token de Google invalido o expirado."]
+["Token de Google inválido o expirado."]
 ```
 
 ```json
-["Inicio con Google no esta configurado en el servidor."]
+["Inicio con Google no está configurado en el servidor."]
 ```
 
 ### `POST /api/usuarios/auth/refresh/`
 
-Publico. Renueva tokens usando refresh token.
+Público. Renueva tokens usando un refresh token.
 
 Body:
 
@@ -231,7 +286,7 @@ Body:
 }
 ```
 
-Respuesta `200` tipica de SimpleJWT:
+Respuesta `200` típica de SimpleJWT:
 
 ```json
 {
@@ -242,12 +297,12 @@ Respuesta `200` tipica de SimpleJWT:
 
 Notas:
 
-- `ROTATE_REFRESH_TOKENS=True`, por eso puede venir un refresh nuevo.
-- `BLACKLIST_AFTER_ROTATION=True`, el refresh anterior queda revocado.
+- `ROTATE_REFRESH_TOKENS=True`; puede devolver un refresh nuevo.
+- `BLACKLIST_AFTER_ROTATION=True`; el refresh anterior queda revocado.
 
 ### `POST /api/usuarios/auth/logout/`
 
-Privado. Requiere JWT y rol `Administrador`. Revoca un refresh token.
+Privado. Requiere cualquier usuario autenticado. Revoca un refresh token.
 
 Body:
 
@@ -266,30 +321,28 @@ Errores:
 ```
 
 ```json
-{"detail": "Refresh token invalido o ya revocado."}
+{"detail": "Refresh token inválido o ya revocado."}
 ```
 
 ### `GET /api/usuarios/me/`
 
-Privado. Requiere JWT y rol `Administrador`. Devuelve el usuario autenticado.
+Privado. Requiere cualquier usuario autenticado. Devuelve el usuario autenticado.
 
-Respuesta `200`: `UsuarioSerializer`.
+Respuesta `200`: objeto `UsuarioSerializer`.
 
 ### `PATCH /api/usuarios/me/`
 
-Privado. Requiere JWT y rol `Administrador`. Actualiza parcialmente el perfil.
+Privado. Requiere cualquier usuario autenticado. Actualiza parcialmente el perfil.
 
 Campos editables:
 
 | Campo | Tipo | Requerido en PATCH | Notas |
 |---|---:|---:|---|
-| `nombre` | string | No | Max 100. |
-| `apellido` | string | No | Max 100. |
-| `telefono` | string | No | Max 20, puede ser `""`. |
-| `direccion` | string | No | Max 255, puede ser `""`. |
-| `is_perfil_completo` | boolean | No recomendado | El backend lo recalcula despues de guardar. |
-
-No editables desde este endpoint: `id`, `correo`, `rol`, `is_active`, `created_at`, `updated_at`.
+| `nombre` | string | No | Máximo 100. |
+| `apellido` | string | No | Máximo 100. |
+| `telefono` | string | No | Máximo 20, puede ser `""`. |
+| `direccion` | string | No | Máximo 255, puede ser `""`. |
+| `is_perfil_completo` | boolean | No recomendado | El backend lo recalcula después de guardar. |
 
 Ejemplo:
 
@@ -304,41 +357,41 @@ Respuesta `200`: usuario actualizado.
 
 ### `PUT /api/usuarios/me/`
 
-Privado. Requiere JWT y rol `Administrador`. Actualizacion completa del perfil. Debe enviar los campos requeridos por el serializer para una actualizacion completa. En frontend se recomienda usar `PATCH`.
+Privado. Requiere cualquier usuario autenticado. Actualización completa del perfil. En frontend se recomienda usar `PATCH`.
 
 ### `POST /api/usuarios/auth/change-password/`
 
-Privado. Requiere JWT y rol `Administrador`. Cambia la contrasena del usuario autenticado.
+Privado. Requiere cualquier usuario autenticado. Cambia la contraseña del usuario autenticado.
 
 Body:
 
 | Campo | Tipo | Requerido | Validaciones |
 |---|---:|---:|---|
-| `current_password` | string | Si | Debe coincidir con la actual. |
-| `new_password` | string | Si | Minimo 8 y validadores de Django. |
-| `new_password_confirm` | string | Si | Debe coincidir con `new_password`. |
+| `current_password` | string | Sí | Debe coincidir con la actual. |
+| `new_password` | string | Sí | Mínimo 8 y validadores de Django. |
+| `new_password_confirm` | string | Sí | Debe coincidir con `new_password`. |
 
 Respuesta `200`:
 
 ```json
 {
-  "detail": "Contrasena actualizada correctamente."
+  "detail": "Contraseña actualizada correctamente."
 }
 ```
 
 Errores comunes:
 
 ```json
-{"current_password": "La contrasena actual no es correcta."}
+{"current_password": "La contraseña actual no es correcta."}
 ```
 
 ```json
-{"new_password_confirm": "Las contrasenas no coinciden."}
+{"new_password_confirm": "Las contraseñas no coinciden."}
 ```
 
 ### `POST /api/usuarios/auth/password-reset/`
 
-Publico. Solicita correo de restablecimiento.
+Público. Solicita correo de restablecimiento.
 
 Body:
 
@@ -352,47 +405,47 @@ Respuesta `200`, exista o no el correo:
 
 ```json
 {
-  "detail": "Si el correo existe en la plataforma, se envio el enlace de restablecimiento."
+  "detail": "Si el correo existe en la plataforma, se envió el enlace de restablecimiento."
 }
 ```
 
 Notas:
 
-- Si `RESEND_API_KEY` no esta configurada, el backend no envia correo real y registra/imprime el contenido.
+- Si `RESEND_API_KEY` no está configurada, el backend no envía correo real y registra/imprime el contenido.
 - El enlace enviado apunta a `{FRONTEND_URL}/auth/reset-password?uid=<uidb64>&token=<token>`.
 
 ### `GET /api/usuarios/auth/password-reset/confirm/<uidb64>/<token>/`
 
-Publico. Valida si el token de restablecimiento sigue vigente.
+Público. Valida si el token de restablecimiento sigue vigente.
 
 Respuesta `200`:
 
 ```json
-{"detail": "Token valido."}
+{"detail": "Token válido."}
 ```
 
 Respuesta `400`:
 
 ```json
-{"detail": "Token invalido o expirado."}
+{"detail": "Token inválido o expirado."}
 ```
 
 ### `POST /api/usuarios/auth/password-reset/confirm/<uidb64>/<token>/`
 
-Publico. Restablece contrasena usando token valido.
+Público. Restablece contraseña usando token válido.
 
 Body:
 
 | Campo | Tipo | Requerido | Validaciones |
 |---|---:|---:|---|
-| `new_password` | string | Si | Minimo 8 y validadores de Django. |
-| `new_password_confirm` | string | Si | Debe coincidir. |
+| `new_password` | string | Sí | Mínimo 8 y validadores de Django. |
+| `new_password_confirm` | string | Sí | Debe coincidir. |
 
 Respuesta `200`:
 
 ```json
 {
-  "detail": "Contrasena restablecida correctamente."
+  "detail": "Contraseña restablecida correctamente."
 }
 ```
 
@@ -400,17 +453,15 @@ Respuesta `200`:
 
 Base: `/api/inventario/`
 
-### Uso Publico vs Privado
+### Uso Público vs Privado
 
-Para la tienda publica, usar solo:
+Para tienda pública:
 
 - `GET /api/inventario/public/productos/`
 - `GET /api/inventario/public/ingredientes/`
 - `GET /api/inventario/public/producto-ingredientes/`
 
-Estos no requieren JWT.
-
-Para panel administrativo o frontend autenticado como `Administrador`, usar los endpoints privados del router:
+Para panel administrativo:
 
 - `/api/inventario/ingredientes/`
 - `/api/inventario/productos/`
@@ -418,81 +469,81 @@ Para panel administrativo o frontend autenticado como `Administrador`, usar los 
 - `/api/inventario/movimientos-ingrediente/`
 - `/api/inventario/movimientos-producto/`
 - `/api/inventario/producciones/`
+- `/api/inventario/producciones/proximas-a-vencer/`
 
-Todos los privados requieren JWT y rol `Administrador` por la configuracion global.
+Los privados de inventario requieren JWT y permiso `IsAdministrador`.
 
-## Campos de Inventario
+### Modelos de Inventario
 
-### Ingrediente
+#### Ingrediente
 
-| Campo | Tipo | Requerido al crear | Publico | Validaciones / Notas |
+| Campo | Tipo | Requerido al crear | Público | Validaciones / Notas |
 |---|---:|---:|---:|---|
-| `id` | integer | No | Si | Autogenerado. |
-| `nombre` | string, max 100 | Si | Si | No puede ser vacio. |
-| `proveedor` | string, max 100 | Si | No en endpoint publico | No puede ser vacio. |
-| `stock_actual` | decimal string, 10 digitos, 2 decimales | Si | Si | Debe ser `> 0` por serializer. |
-| `stock_minimo` | decimal string, 10 digitos, 2 decimales | Si | Si | Debe ser `> 0` por serializer. |
-| `unidad_medida` | string | Si | Si | Opciones: `kg`, `g`, `l`, `ml`. |
+| `id` | integer | No | Sí | Autogenerado. |
+| `nombre` | string, max 100 | Sí | Sí | No puede ser vacío. |
+| `proveedor` | string, max 100 | Sí | No en endpoint público | No puede ser vacío. |
+| `stock_actual` | decimal string, 10 dígitos, 2 decimales | Sí | Sí | Debe ser `> 0` por serializer. |
+| `stock_minimo` | decimal string, 10 dígitos, 2 decimales | Sí | Sí | Debe ser `> 0` por serializer. |
+| `unidad_medida` | string | Sí | Sí | Opciones: `kg`, `g`, `l`, `ml`. |
 
-### Producto
+#### Producto
 
-| Campo          |                                    Tipo | Requerido al crear | Publico | Validaciones / Notas                                                                                       |
-|----------------|----------------------------------------:|---:|---:|------------------------------------------------------------------------------------------------------------|
-| `id`           |                                 integer | No | Si | Autogenerado.                                                                                              |
-| `nombre`       |                         string, max 100 | Si | Si | No puede ser vacio.                                                                                        |
-| `precio`       | decimal string, 10 digitos, 2 decimales | Si | Si | Debe ser `> 0`.                                                                                            |
-| `stock_actual` |                                 integer | Si | Si | Minimo `0`.                                                                                                |
-| `stock_minimo` |                                 integer | Si | Si | Minimo `0`.                                                                                                |
-| `inhabilitado` |                                 boolean | No | Si | Default `false`. El endpoint publico de productos solo devuelve registros con `inhabilitado=false`.        |
-| `descripcion`  |                          campo de texto | No | Si | Campo opcional para describir el producto en el catalogo. Puede ser `null` o texto vacio.                 |
-| `ingredientes` |                            array de IDs | No | Si | ManyToMany through `ProductoIngrediente`; normalmente administrar desde `producto-ingredientes`.           |
-
-### ProductoIngrediente
-
-Relacion entre producto e ingrediente.
-
-| Campo | Tipo | Requerido al crear | Publico | Validaciones / Notas |
+| Campo | Tipo | Requerido al crear | Público | Validaciones / Notas |
 |---|---:|---:|---:|---|
-| `id` | integer | No | Si | Autogenerado. |
-| `id_producto` | integer | Si | Si | ID de producto existente. |
-| `id_ingrediente` | integer | Si | Si | ID de ingrediente existente. |
-| `cantidad_ingrediente` | decimal string, 10 digitos, 2 decimales | Si | Si | Debe ser `> 0`. Cantidad de ingrediente requerida por unidad producida. |
-| `porcentaje_ingrediente` | decimal string, 5 digitos, 2 decimales | Si | Si | Debe ser `> 0` y `<= 100`. |
+| `id` | integer | No | Sí | Autogenerado. |
+| `nombre` | string, max 100 | Sí | Sí | No puede ser vacío. |
+| `precio` | decimal string, 10 dígitos, 2 decimales | Sí | Sí | Debe ser `> 0`. |
+| `stock_actual` | integer | Sí | Sí | Mínimo `0`. |
+| `stock_minimo` | integer | Sí | Sí | Mínimo `0`. |
+| `inhabilitado` | boolean | No | Sí | Default `false`; el endpoint público solo devuelve `false`. |
+| `descripcion` | text/null | No | Sí | Puede ser `null` o texto vacío. |
+| `ingredientes` | array de IDs | No | Sí | ManyToMany through `ProductoIngrediente`; se recomienda administrar cantidades desde `producto-ingredientes`. |
 
-### Produccion
+#### ProductoIngrediente
+
+| Campo | Tipo | Requerido al crear | Público | Validaciones / Notas |
+|---|---:|---:|---:|---|
+| `id` | integer | No | Sí | Autogenerado. |
+| `id_producto` | integer | Sí | Sí | ID de producto existente. |
+| `id_ingrediente` | integer | Sí | Sí | ID de ingrediente existente. |
+| `cantidad_ingrediente` | decimal string, 10 dígitos, 2 decimales | Sí | Sí | Debe ser `> 0`. |
+| `porcentaje_ingrediente` | decimal string, 5 dígitos, 2 decimales | Sí | Sí | Debe ser `> 0` y `<= 100`. |
+
+#### Produccion
+
+Cada registro de `Produccion` representa un lote producido.
 
 | Campo | Tipo | Requerido al crear | Validaciones / Notas |
 |---|---:|---:|---|
 | `id` | integer | No | Autogenerado. |
-| `id_producto` | integer | Si | Producto existente. |
-| `cantidad_producida` | integer | Si | Minimo `1`. |
-| `fecha_creacion` | datetime | No | Solo lectura; se genera automaticamente. |
-| `fecha_vencimiento` | datetime | Si | Fecha/hora de vencimiento. Acepta ISO 8601 o `YYYY-MM-DD`. |
+| `id_producto` | integer | Sí | Producto existente. |
+| `cantidad_producida` | integer | Sí | Mínimo `1`. |
+| `fecha_creacion` | datetime | No | Solo lectura; se genera automáticamente. |
+| `fecha_vencimiento` | datetime/null | Sí por API de creación | Fecha/hora de vencimiento; acepta ISO 8601 o `YYYY-MM-DD`. |
 
-Al crear una produccion con `POST /api/inventario/producciones/`, el backend:
+Al crear una producción con `POST /api/inventario/producciones/`, el backend:
 
 1. Bloquea el producto con `select_for_update`.
 2. Valida stock suficiente de cada ingrediente.
-3. Descuenta ingredientes segun `cantidad_ingrediente * cantidad_producida`.
+3. Descuenta ingredientes según `cantidad_ingrediente * cantidad_producida`.
 4. Crea movimientos de ingrediente tipo `SALIDA`.
 5. Aumenta `Producto.stock_actual`.
 6. Crea movimiento de producto tipo `ENTRADA`.
-7. Crea el registro de produccion.
+7. Crea el registro de producción.
+8. Dispara señales de stock y vencimiento asociadas al guardado de modelos.
 
-### MovimientoIngrediente
+#### MovimientoIngrediente
 
 | Campo | Tipo | Requerido al crear | Validaciones / Notas |
 |---|---:|---:|---|
 | `id` | integer | No | Autogenerado. |
-| `id_ingrediente` | integer | Si | Ingrediente existente. |
-| `tipo_movimiento` | string | Si | Opciones: `ENTRADA`, `SALIDA`, `AJUSTE`. |
-| `stock_anterior` | decimal string | No | Solo lectura; se calcula automaticamente al crear el movimiento. |
-| `stock_posterior` | decimal string | No | Solo lectura; se calcula automaticamente al crear el movimiento. |
-| `cantidad` | decimal string | Si | Debe ser `> 0`. |
-| `fecha` | date/datetime | No | Solo lectura; se genera automaticamente. |
+| `id_ingrediente` | integer | Sí | Ingrediente existente. |
+| `tipo_movimiento` | string | Sí | Opciones: `ENTRADA`, `SALIDA`, `AJUSTE`. |
+| `stock_anterior` | decimal string | No | Solo lectura; se calcula al crear. |
+| `stock_posterior` | decimal string | No | Solo lectura; se calcula al crear. |
+| `cantidad` | decimal string | Sí | Debe ser `> 0`. |
+| `fecha` | datetime | No | Solo lectura; se genera automáticamente. |
 | `comentarios` | string/null | No | Texto opcional. |
-
-Al crear un movimiento manual, el backend bloquea el ingrediente con `select_for_update`, calcula los stocks y actualiza `Ingrediente.stock_actual` en la misma transaccion.
 
 Comportamiento por `tipo_movimiento`:
 
@@ -502,20 +553,18 @@ Comportamiento por `tipo_movimiento`:
 
 Los movimientos son historiales: se pueden listar, consultar y crear, pero no editar ni eliminar por API.
 
-### MovimientoProducto
+#### MovimientoProducto
 
 | Campo | Tipo | Requerido al crear | Validaciones / Notas |
 |---|---:|---:|---|
 | `id` | integer | No | Autogenerado. |
-| `id_producto` | integer | Si | Producto existente. |
-| `tipo_movimiento` | string | Si | Opciones: `ENTRADA`, `SALIDA`, `AJUSTE`. |
-| `stock_anterior` | integer | No | Solo lectura; se calcula automaticamente al crear el movimiento. |
-| `stock_posterior` | integer | No | Solo lectura; se calcula automaticamente al crear el movimiento. |
-| `cantidad` | integer | Si | Minimo `1`. |
-| `fecha` | date/datetime | No | Solo lectura; se genera automaticamente. |
+| `id_producto` | integer | Sí | Producto existente. |
+| `tipo_movimiento` | string | Sí | Opciones: `ENTRADA`, `SALIDA`, `AJUSTE`. |
+| `stock_anterior` | integer | No | Solo lectura; se calcula al crear. |
+| `stock_posterior` | integer | No | Solo lectura; se calcula al crear. |
+| `cantidad` | integer | Sí | Mínimo `1`. |
+| `fecha` | datetime | No | Solo lectura; se genera automáticamente. |
 | `comentarios` | string/null | No | Texto opcional. |
-
-Al crear un movimiento manual, el backend bloquea el producto con `select_for_update`, calcula los stocks y actualiza `Producto.stock_actual` en la misma transaccion.
 
 Comportamiento por `tipo_movimiento`:
 
@@ -525,11 +574,11 @@ Comportamiento por `tipo_movimiento`:
 
 Los movimientos son historiales: se pueden listar, consultar y crear, pero no editar ni eliminar por API.
 
-## Endpoints Publicos de Tienda
+### Endpoints Públicos de Tienda
 
-### `GET /api/inventario/public/productos/`
+#### `GET /api/inventario/public/productos/`
 
-Publico. Lista productos habilitados. Excluye productos con `inhabilitado=true`.
+Público. Lista productos habilitados. Excluye productos con `inhabilitado=true`.
 
 Respuesta `200`:
 
@@ -542,21 +591,15 @@ Respuesta `200`:
     "stock_actual": 10,
     "stock_minimo": 2,
     "inhabilitado": false,
-    "descripcion": "Producto demo para catalogo",
+    "descripcion": "Producto demo para catálogo",
     "ingredientes": [1, 2]
   }
 ]
 ```
 
-Notas para frontend:
+#### `GET /api/inventario/public/ingredientes/`
 
-- Este endpoint no requiere token.
-- Devuelve los mismos campos que el serializer privado de producto.
-- Solo devuelve productos con `inhabilitado=false`; los productos inhabilitados no aparecen en la respuesta.
-
-### `GET /api/inventario/public/ingredientes/`
-
-Publico. Lista ingredientes sin exponer proveedor.
+Público. Lista ingredientes sin exponer proveedor.
 
 Respuesta `200`:
 
@@ -572,13 +615,13 @@ Respuesta `200`:
 ]
 ```
 
-Campo oculto solo aqui:
+Campo oculto solo aquí:
 
 - `proveedor`
 
-### `GET /api/inventario/public/producto-ingredientes/`
+#### `GET /api/inventario/public/producto-ingredientes/`
 
-Publico. Lista relaciones producto-ingrediente.
+Público. Lista relaciones producto-ingrediente.
 
 Respuesta `200`:
 
@@ -594,20 +637,13 @@ Respuesta `200`:
 ]
 ```
 
-Uso recomendado:
+### Endpoints Privados de Inventario - Router
 
-- Combinar con `public/productos/` y `public/ingredientes/` si la tienda necesita mostrar composicion o detalles del producto.
-- La respuesta trae IDs, no objetos anidados.
-
-## Endpoints Privados de Inventario - Router
-
-Los siguientes endpoints son generados por `DefaultRouter` para cada recurso. Todos requieren JWT y rol `Administrador`.
-
-### Patron de rutas ViewSet
+Los siguientes endpoints son generados por `DefaultRouter`. Todos requieren JWT y permiso `IsAdministrador`.
 
 Para recursos CRUD (`ingredientes`, `productos`, `producto-ingredientes`):
 
-| Metodo | Ruta | Descripcion |
+| Método | Ruta | Descripción |
 |---|---|---|
 | `GET` | `/api/inventario/<recurso>/` | Listar. |
 | `POST` | `/api/inventario/<recurso>/` | Crear. |
@@ -616,24 +652,16 @@ Para recursos CRUD (`ingredientes`, `productos`, `producto-ingredientes`):
 | `PATCH` | `/api/inventario/<recurso>/<id>/` | Actualizar parcial. |
 | `DELETE` | `/api/inventario/<recurso>/<id>/` | Eliminar. |
 
-Para recursos de historial (`movimientos-ingrediente`, `movimientos-producto`):
+Para historiales (`movimientos-ingrediente`, `movimientos-producto`):
 
-| Metodo | Ruta | Descripcion |
+| Método | Ruta | Descripción |
 |---|---|---|
-| `GET` | `/api/inventario/<recurso>/` | Listar historico. |
+| `GET` | `/api/inventario/<recurso>/` | Listar histórico. |
 | `POST` | `/api/inventario/<recurso>/` | Crear movimiento y actualizar stock. |
 | `GET` | `/api/inventario/<recurso>/<id>/` | Obtener detalle. |
 | `PUT` | `/api/inventario/<recurso>/<id>/` | No permitido; responde `405`. |
 | `PATCH` | `/api/inventario/<recurso>/<id>/` | No permitido; responde `405`. |
 | `DELETE` | `/api/inventario/<recurso>/<id>/` | No permitido; responde `405`. |
-
-Recursos disponibles:
-
-- `ingredientes`
-- `productos`
-- `producto-ingredientes`
-- `movimientos-ingrediente`
-- `movimientos-producto`
 
 ### Ingredientes Privado
 
@@ -659,7 +687,7 @@ Body:
 
 Validaciones:
 
-- `nombre` y `proveedor` no pueden ser vacios.
+- `nombre` y `proveedor` no pueden ser vacíos.
 - `stock_actual` y `stock_minimo` deben ser decimales `> 0`.
 - `unidad_medida`: `kg`, `g`, `l`, `ml`.
 
@@ -671,7 +699,7 @@ Actualiza parcialmente cualquier campo enviado.
 
 Elimina el ingrediente si no tiene registros protegidos relacionados.
 
-Si existen movimientos de ingrediente u otras referencias protegidas, responde `400` y no elimina el registro:
+Si existen movimientos de ingrediente u otras referencias protegidas, responde `400`:
 
 ```json
 {"detail": "No se puede eliminar porque existen registros relacionados."}
@@ -696,23 +724,24 @@ Body:
   "stock_actual": 10,
   "stock_minimo": 2,
   "inhabilitado": false,
-  "descripcion": "Producto demo para catalogo"
+  "descripcion": "Producto demo para catálogo"
 }
 ```
 
-Tambien puede recibir `ingredientes` como array de IDs si se quiere manejar el ManyToMany directamente, aunque la ruta recomendada para cantidades y porcentajes es `producto-ingredientes`.
-
 Validaciones:
 
-- `nombre` no puede ser vacio.
+- `nombre` no puede ser vacío.
 - `precio` debe ser decimal `> 0`.
 - `stock_actual` y `stock_minimo` deben ser enteros `>= 0`.
 - `inhabilitado` es opcional; default `false`.
-- `descripcion` es opcional; puede ser texto, `null` o cadena vacia.
+- `descripcion` es opcional; puede ser texto, `null` o cadena vacía.
+- `ingredientes` puede enviarse como array de IDs, pero para cantidades y porcentajes se recomienda `producto-ingredientes`.
 
 #### `PATCH /api/inventario/productos/<id>/`
 
-Actualiza parcialmente un producto. Ejemplo para inhabilitar:
+Actualiza parcialmente un producto.
+
+Ejemplo:
 
 ```json
 {
@@ -724,7 +753,7 @@ Actualiza parcialmente un producto. Ejemplo para inhabilitar:
 
 Elimina el producto si no tiene registros protegidos relacionados.
 
-Si existen producciones, movimientos de producto u otras referencias protegidas, responde `400` y no elimina el registro:
+Si existen producciones, movimientos de producto u otras referencias protegidas, responde `400`:
 
 ```json
 {"detail": "No se puede eliminar porque existen registros relacionados."}
@@ -763,7 +792,7 @@ Base: `/api/inventario/movimientos-ingrediente/`
 
 #### `GET /api/inventario/movimientos-ingrediente/`
 
-Lista el historico de movimientos de ingredientes.
+Lista el histórico de movimientos de ingredientes.
 
 #### `GET /api/inventario/movimientos-ingrediente/<id>/`
 
@@ -771,7 +800,7 @@ Obtiene el detalle de un movimiento de ingrediente.
 
 #### `POST /api/inventario/movimientos-ingrediente/`
 
-Crear un movimiento manual de ingrediente y actualiza `Ingrediente.stock_actual`.
+Crea un movimiento manual de ingrediente y actualiza `Ingrediente.stock_actual`.
 
 Body:
 
@@ -782,23 +811,6 @@ Body:
   "cantidad": "2.50",
   "comentarios": "Ajuste manual"
 }
-```
-
-Efectos:
-
-- Calcula `stock_anterior` desde el ingrediente.
-- Calcula `stock_posterior` segun `tipo_movimiento`.
-- Guarda el nuevo `stock_actual` del ingrediente.
-- Guarda el movimiento con ambos stocks calculados.
-
-Validaciones:
-
-- `cantidad` debe ser decimal `> 0`.
-- `tipo_movimiento` debe ser `ENTRADA`, `SALIDA` o `AJUSTE`.
-- En `SALIDA`, si `cantidad > stock_actual`, responde `400`:
-
-```json
-["Stock insuficiente para realizar la salida."]
 ```
 
 Respuesta `201`:
@@ -816,11 +828,11 @@ Respuesta `201`:
 }
 ```
 
-Metodos no permitidos:
+Error por stock insuficiente:
 
-- `PUT /api/inventario/movimientos-ingrediente/<id>/` responde `405`.
-- `PATCH /api/inventario/movimientos-ingrediente/<id>/` responde `405`.
-- `DELETE /api/inventario/movimientos-ingrediente/<id>/` responde `405`.
+```json
+["Stock insuficiente para realizar la salida."]
+```
 
 ### Movimientos de Producto Privado
 
@@ -828,7 +840,7 @@ Base: `/api/inventario/movimientos-producto/`
 
 #### `GET /api/inventario/movimientos-producto/`
 
-Lista el historico de movimientos de productos.
+Lista el histórico de movimientos de productos.
 
 #### `GET /api/inventario/movimientos-producto/<id>/`
 
@@ -836,7 +848,7 @@ Obtiene el detalle de un movimiento de producto.
 
 #### `POST /api/inventario/movimientos-producto/`
 
-Crear un movimiento manual de producto y actualiza `Producto.stock_actual`.
+Crea un movimiento manual de producto y actualiza `Producto.stock_actual`.
 
 Body:
 
@@ -847,23 +859,6 @@ Body:
   "cantidad": 5,
   "comentarios": "Ajuste manual"
 }
-```
-
-Efectos:
-
-- Calcula `stock_anterior` desde el producto.
-- Calcula `stock_posterior` segun `tipo_movimiento`.
-- Guarda el nuevo `stock_actual` del producto.
-- Guarda el movimiento con ambos stocks calculados.
-
-Validaciones:
-
-- `cantidad` debe ser entero `>= 1`.
-- `tipo_movimiento` debe ser `ENTRADA`, `SALIDA` o `AJUSTE`.
-- En `SALIDA`, si `cantidad > stock_actual`, responde `400`:
-
-```json
-["Stock insuficiente para realizar la salida."]
 ```
 
 Respuesta `201`:
@@ -881,17 +876,19 @@ Respuesta `201`:
 }
 ```
 
-Metodos no permitidos:
+Error por stock insuficiente:
 
-- `PUT /api/inventario/movimientos-producto/<id>/` responde `405`.
-- `PATCH /api/inventario/movimientos-producto/<id>/` responde `405`.
-- `DELETE /api/inventario/movimientos-producto/<id>/` responde `405`.
+```json
+["Stock insuficiente para realizar la salida."]
+```
 
-## Producciones
+### Producciones
 
-### `GET /api/inventario/producciones/`
+Base: `/api/inventario/producciones/`
 
-Privado. Requiere JWT y rol `Administrador`. Lista producciones ordenadas por `fecha_creacion` descendente.
+#### `GET /api/inventario/producciones/`
+
+Privado. Requiere JWT y permiso `IsAdministrador`. Lista producciones ordenadas por `fecha_creacion` descendente.
 
 Respuesta `200`:
 
@@ -907,9 +904,9 @@ Respuesta `200`:
 ]
 ```
 
-### `POST /api/inventario/producciones/`
+#### `POST /api/inventario/producciones/`
 
-Privado. Requiere JWT y rol `Administrador`. Crea una produccion y actualiza inventario en una transaccion.
+Privado. Requiere JWT y permiso `IsAdministrador`. Crea una producción y actualiza inventario en una transacción.
 
 Body:
 
@@ -923,14 +920,11 @@ Body:
 
 Validaciones:
 
-- `id_producto` es requerido.
-- `cantidad_producida` es requerida.
-- `fecha_vencimiento` es requerida.
-- `cantidad_producida` debe ser entero.
-- `cantidad_producida` debe ser mayor que `0`.
-- `fecha_vencimiento` debe ser una fecha/hora valida.
+- `id_producto` es requerido y debe ser entero.
+- `cantidad_producida` es requerida, debe ser entero y debe ser mayor que `0`.
+- `fecha_vencimiento` es requerida y debe ser fecha/hora válida.
 - El producto debe existir.
-- Debe haber stock suficiente de ingredientes segun las relaciones `ProductoIngrediente`.
+- Debe haber stock suficiente de ingredientes según las relaciones `ProductoIngrediente`.
 
 Respuesta `201`:
 
@@ -975,136 +969,108 @@ Efectos secundarios:
 - Incrementa `Producto.stock_actual`.
 - Crea `MovimientoProducto` tipo `ENTRADA`.
 - Crea `Produccion`.
+- Ejecuta señales de notificación asociadas a stock y vencimiento.
 
-## Panel Admin de Django
+#### `GET /api/inventario/producciones/proximas-a-vencer/`
 
-Ruta web:
+Privado. Requiere JWT y permiso `IsAdministrador`. Solo permite consulta por `GET`.
 
-```txt
-/admin/
+Lista los lotes de producción cuya `fecha_vencimiento` cumple:
+
+- Fecha de vencimiento mayor o igual a la fecha actual.
+- Fecha de vencimiento menor o igual a un mes calendario desde la fecha actual.
+- `fecha_vencimiento` no nula.
+
+Detalles de cálculo:
+
+- El endpoint compara por fecha calendario usando `timezone.localdate()`.
+- No compara por hora exacta, por lo que un lote que vence hoy se incluye.
+- El límite superior es un mes calendario, no un rango fijo de 30 días.
+- La respuesta se ordena por `fecha_vencimiento` ascendente y luego por `id`.
+- No crea notificaciones ni modifica inventario; solo consulta la tabla `produccion`.
+
+Respuesta `200`:
+
+```json
+[
+  {
+    "id": 8,
+    "cantidad_producida": 20,
+    "fecha_creacion": "2026-05-24T13:30:00Z",
+    "fecha_vencimiento": "2026-06-15T00:00:00Z",
+    "id_producto": 1
+  },
+  {
+    "id": 9,
+    "cantidad_producida": 12,
+    "fecha_creacion": "2026-05-25T10:00:00Z",
+    "fecha_vencimiento": "2026-06-24T00:00:00Z",
+    "id_producto": 2
+  }
+]
 ```
 
-No es API JSON. Es el panel administrativo de Django.
+Si no hay lotes próximos a vencer:
 
-Modelos registrados:
+```json
+[]
+```
 
-- Ingredientes
-- Productos
-- Productos_Ingredientes
-- Producciones
-- Movimientos_Ingredientes
-- Movimientos_Productos
-- Usuarios
-- Roles
+Métodos no permitidos:
 
-Nota importante de producciones:
+- `POST /api/inventario/producciones/proximas-a-vencer/` responde `405`.
+- `PUT /api/inventario/producciones/proximas-a-vencer/` responde `405`.
+- `PATCH /api/inventario/producciones/proximas-a-vencer/` responde `405`.
+- `DELETE /api/inventario/producciones/proximas-a-vencer/` responde `405`.
 
-- Crear una `Produccion` desde el admin ejecuta el mismo servicio que `POST /api/inventario/producciones/`.
-- Por tanto descuenta ingredientes, aumenta stock del producto y crea movimientos.
-- Si no hay stock suficiente, el formulario muestra error de validacion.
+## Notificaciones
 
-## Apps con Modelos pero sin API Expuesta
+Base: `/api/notificaciones/`
 
-Estas apps existen en `INSTALLED_APPS`, pero actualmente no estan incluidas en `project/urls.py` o no tienen endpoints implementados:
+La app `notificaciones` sí está montada en `project/urls.py` y sí expone API. Esta sección reemplaza la información contradictoria anterior.
 
-### Ventas
+### Modelo Notificacion
 
-Modelos:
+| Campo | Tipo | Expuesto en API | Descripción |
+|---|---:|---:|---|
+| `id` | integer | Sí | ID de la notificación. |
+| `usuario` | FK Usuario/null | No directo | Usuario asociado, si aplica. |
+| `producto` | FK Producto/null | Como `source_type/source_id` | Producto asociado, si aplica. |
+| `ingrediente` | FK Ingrediente/null | Como `source_type/source_id` | Ingrediente asociado, si aplica. |
+| `credito` | FK Credito/null | Como `source_type/source_id` | Crédito asociado, si aplica. |
+| `cuota_credito` | FK CuotaCredito/null | Como `source_type/source_id` | Cuota asociada, si aplica. |
+| `tipo` | string | Sí | Tipo técnico de notificación. |
+| `tipo_display` | string | Sí | Nombre legible del tipo. |
+| `mensaje` | text | Sí | Mensaje mostrado al usuario. |
+| `leida` | boolean | Sí | `false` para activa, `true` para resuelta. |
+| `fecha_generada` | datetime | Sí | Fecha de creación o actualización de alerta. |
+| `fecha_leida` | datetime/null | Sí | Fecha en que se resolvió. |
+| `source_type` | string/null | Sí | `producto`, `ingrediente`, `credito`, `cuota_credito` o `null`. |
+| `source_id` | integer/null | Sí | ID del origen asociado. |
 
-- `CarritoDeCompras`
-- `Pedido`
-- `PedidoProducto`
+Restricción de integridad del modelo:
 
-No hay `/api/ventas/` montado actualmente.
+- Una notificación puede tener como máximo una referencia de origen entre producto, ingrediente, crédito o cuota.
 
-### Creditos
+Tipos soportados en `tipo`:
 
-Modelos:
+- `stock_producto`
+- `stock_ingrediente`
+- `vencimiento_producto`
+- `deuda_vencida`
+- `deuda_proxima`
 
-- `Credito`
-- `CuotaCredito`
+### `GET /api/notificaciones/`
 
-No hay `/api/creditos/` montado actualmente.
+Privado. Requiere usuario autenticado. El queryset solo devuelve notificaciones para usuarios con rol `Administrador`.
 
-### Notificaciones
+Comportamiento por tipo de usuario:
 
-Modelo:
+- Usuario anónimo: `401`.
+- Usuario autenticado sin rol `Administrador`: `200` con `[]`.
+- Usuario autenticado con rol `Administrador`: `200` con notificaciones activas (`leida=false`).
 
-- `Notificacion`
-
-No hay `/api/notificaciones/` montado actualmente.
-
-## Recomendaciones para Frontend
-
-### Tienda Publica
-
-Usar:
-
-- `GET /api/inventario/public/productos/`
-- `GET /api/inventario/public/ingredientes/`
-- `GET /api/inventario/public/producto-ingredientes/`
-- `POST /api/usuarios/auth/register/`
-- `POST /api/usuarios/auth/login/`
-- `POST /api/usuarios/auth/google/`
-- `POST /api/usuarios/auth/password-reset/`
-- `GET/POST /api/usuarios/auth/password-reset/confirm/<uidb64>/<token>/`
-
-No enviar JWT en endpoints publicos; no lo necesitan.
-
-### Administrador Autenticado
-
-Usar:
-
-- `GET /api/usuarios/me/`
-- `PATCH /api/usuarios/me/`
-- `POST /api/usuarios/auth/change-password/`
-- `POST /api/usuarios/auth/logout/`
-- `POST /api/usuarios/auth/refresh/`
-
-### Panel Administrativo Frontend
-
-Usar endpoints privados de inventario con JWT de un usuario con rol `Administrador`:
-
-- CRUD de ingredientes.
-- CRUD de productos.
-- CRUD de producto-ingredientes.
-- `POST /api/inventario/producciones/` para producir y mover stock correctamente.
-- `POST /api/inventario/movimientos-ingrediente/` para ajustes manuales de stock de ingredientes.
-- `POST /api/inventario/movimientos-producto/` para ajustes manuales de stock de productos.
-- `GET /api/inventario/movimientos-ingrediente/` y `GET /api/inventario/movimientos-producto/` para historicos.
-
-Evitar:
-
-- Editar o eliminar movimientos: son historiales y la API responde `405`.
-- Usar los endpoints publicos para administracion, porque ocultan o simplifican informacion.
-
-## Pendientes Tecnicos Detectados
-
-Estos puntos no bloquean el consumo actual, pero son importantes para planificacion:
-
-- Los endpoints privados ya exigen rol `Administrador`; aun no hay permisos granulares por accion.
-- No hay API implementada para ventas/carrito/pedidos.
-- No hay API implementada para creditos.
-- No hay API implementada para notificaciones.
-- Los endpoints de movimientos no tienen filtros ni busqueda configurados; solo listan, crean y consultan detalle.
-- Los endpoints de listado no tienen paginacion, filtros ni busqueda configurados.
-# Documentación de API: Módulo de Notificaciones 🔔
-
-Este módulo está restringido. **Solo los usuarios autenticados con el rol de `Administrador`** pueden acceder a estos endpoints. Si un usuario sin rol de administrador hace la solicitud, recibirá una lista vacía `[]`.
-
----
-
-## 1. Listar Notificaciones Activas
-
-Obtiene la lista de todas las alertas actuales que requieren la atención del administrador y que no han sido resueltas. 
-*(Nota: El backend agrupa automáticamente notificaciones recurrentes del mismo problema, actualizando su fecha y mostrándolas siempre de primeras).*
-
-- **Método**: `GET`
-- **URL**: `/api/notificaciones/`
-- **Headers**:
-  - `Authorization: Bearer <token>`
-
-### Respuesta Exitosa (`200 OK`)
+Respuesta `200`:
 
 ```json
 [
@@ -1118,44 +1084,23 @@ Obtiene la lista de todas las alertas actuales que requieren la atención del ad
     "fecha_leida": null,
     "source_type": "producto",
     "source_id": 42
-  },
-  {
-    "id": 16,
-    "tipo": "deuda_vencida",
-    "tipo_display": "Deuda Vencida",
-    "mensaje": "El crédito #120 tiene una cuota vencida.",
-    "leida": false,
-    "fecha_generada": "2026-05-31T10:15:00Z",
-    "fecha_leida": null,
-    "source_type": "credito",
-    "source_id": 120
   }
 ]
 ```
 
-> [!TIP]
-> **Sobre `source_type` y `source_id`**: Utilicen estos campos dinámicos para saber a qué módulo redirigir al usuario cuando haga clic en la notificación. Por ejemplo, si `source_type` es `"producto"`, lo redirigen a la vista de detalles del producto con ID `42`.
+Uso recomendado de `source_type` y `source_id`:
 
----
+- Si `source_type` es `producto`, redirigir al detalle del producto con `source_id`.
+- Si `source_type` es `ingrediente`, redirigir al detalle del ingrediente con `source_id`.
+- Si `source_type` es `credito` o `cuota_credito`, redirigir al módulo de créditos cuando exista API o vista frontend.
 
-## 2. Resolver/Marcar como Leída una Notificación
+### `PATCH /api/notificaciones/<id>/resolve/`
 
-Marca una alerta específica como resuelta (`leida = true`). Desaparecerá de la lista principal de alertas activas. 
-*(Nota: Si el problema de fondo en el backend no se soluciona, por ejemplo no se reabastece el stock, el backend podría volver a marcarla como "no leída" automáticamente al día siguiente).*
+Privado. Marca una alerta como resuelta (`leida=true`) y asigna `fecha_leida`.
 
-- **Método**: `PATCH`
-- **URL**: `/api/notificaciones/<id>/resolve/`
-- **Headers**:
-  - `Authorization: Bearer <token>`
+Body: no requiere body.
 
-### Ejemplo de Petición
-
-```http
-PATCH /api/notificaciones/15/resolve/
-```
-No se requiere body en la petición.
-
-### Respuesta Exitosa (`200 OK`)
+Respuesta `200`:
 
 ```json
 {
@@ -1163,12 +1108,147 @@ No se requiere body en la petición.
 }
 ```
 
----
+Comportamiento:
 
-## Tipos de Notificaciones Soportadas (`tipo`)
-Actualmente el sistema puede devolver los siguientes tipos en el campo `tipo`:
-- `"stock_producto"`
-- `"stock_ingrediente"`
-- `"vencimiento_producto"`
-- `"deuda_vencida"`
-- `"deuda_proxima"`
+- Usuario anónimo: `401`.
+- Usuario autenticado sin rol `Administrador`: normalmente `404`, porque su queryset visible está vacío.
+- Usuario administrador con ID existente visible: `200`.
+
+### Generación de Notificaciones
+
+Las notificaciones se crean o resuelven desde servicios y señales, no desde endpoints públicos de creación.
+
+Eventos actuales:
+
+- Al guardar `Producto`, se evalúa stock bajo contra `stock_minimo`.
+- Al guardar `Ingrediente`, se evalúa stock bajo contra `stock_minimo`.
+- Al guardar `Produccion`, se evalúa vencimiento próximo con ventana de 7 días en la señal actual.
+
+Notas importantes:
+
+- El endpoint `/api/inventario/producciones/proximas-a-vencer/` usa una ventana de un mes calendario y solo consulta datos.
+- La señal de notificación por vencimiento usa una ventana de 7 días y puede crear o resolver notificaciones.
+- Son comportamientos distintos y ambos están documentados aquí para evitar confusión.
+
+## Panel Admin de Django
+
+Ruta web:
+
+```txt
+/admin/
+```
+
+No es API JSON. Es el panel administrativo de Django.
+
+Modelos registrados actualmente:
+
+- `Ingrediente`
+- `Producto`
+- `ProductoIngrediente`
+- `Produccion`
+- `MovimientoIngrediente`
+- `MovimientoProducto`
+- `Rol`
+- `Usuario`
+
+Notas:
+
+- Crear una `Produccion` desde el admin ejecuta `services.crear_produccion`.
+- Por tanto descuenta ingredientes, aumenta stock del producto y crea movimientos.
+- Si no hay stock suficiente, el formulario muestra error de validación.
+- `Ventas`, `Creditos` y `Notificacion` tienen modelos, pero no están registrados en admin actualmente.
+
+## Apps con Modelos pero sin API Expuesta
+
+Estas apps existen en `INSTALLED_APPS`, pero actualmente no están montadas en `project/urls.py` con endpoints propios.
+
+### Ventas
+
+Modelos:
+
+- `CarritoDeCompras`
+- `Pedido`
+- `PedidoProducto`
+
+Estado API:
+
+- No hay `/api/ventas/` montado actualmente.
+- `apps/ventas/views.py` no implementa endpoints.
+
+### Creditos
+
+Modelos:
+
+- `Credito`
+- `CuotaCredito`
+
+Estado API:
+
+- No hay `/api/creditos/` montado actualmente.
+- `apps/creditos/views.py` no implementa endpoints.
+
+## Recomendaciones para Frontend
+
+### Tienda Pública
+
+Usar:
+
+- `GET /api/inventario/public/productos/`
+- `GET /api/inventario/public/ingredientes/`
+- `GET /api/inventario/public/producto-ingredientes/`
+- `POST /api/usuarios/auth/register/`
+- `POST /api/usuarios/auth/login/`
+- `POST /api/usuarios/auth/google/`
+- `POST /api/usuarios/auth/password-reset/`
+- `GET /api/usuarios/auth/password-reset/confirm/<uidb64>/<token>/`
+- `POST /api/usuarios/auth/password-reset/confirm/<uidb64>/<token>/`
+
+No enviar JWT en endpoints públicos; no lo necesitan.
+
+### Usuario Autenticado
+
+Usar:
+
+- `GET /api/usuarios/me/`
+- `PATCH /api/usuarios/me/`
+- `POST /api/usuarios/auth/change-password/`
+- `POST /api/usuarios/auth/logout/`
+- `POST /api/usuarios/auth/refresh/`
+
+Estos endpoints requieren token, pero no rol `Administrador`.
+
+### Panel Administrativo Frontend
+
+Usar JWT de un usuario con rol `Administrador`.
+
+Inventario:
+
+- CRUD de ingredientes.
+- CRUD de productos.
+- CRUD de producto-ingredientes.
+- `POST /api/inventario/producciones/` para producir y mover stock correctamente.
+- `GET /api/inventario/producciones/proximas-a-vencer/` para revisar lotes que vencen entre hoy y un mes calendario.
+- `POST /api/inventario/movimientos-ingrediente/` para ajustes manuales de stock de ingredientes.
+- `POST /api/inventario/movimientos-producto/` para ajustes manuales de stock de productos.
+- `GET /api/inventario/movimientos-ingrediente/` y `GET /api/inventario/movimientos-producto/` para históricos.
+
+Notificaciones:
+
+- `GET /api/notificaciones/` para alertas activas.
+- `PATCH /api/notificaciones/<id>/resolve/` para marcar una alerta como resuelta.
+
+Evitar:
+
+- Editar o eliminar movimientos; son historiales y la API responde `405`.
+- Usar endpoints públicos para administración, porque ocultan o simplifican información.
+- Crear producciones modificando stock manualmente; usar `POST /api/inventario/producciones/` para mantener movimientos y stock coherentes.
+
+## Pendientes Técnicos Detectados
+
+Estos puntos no bloquean el consumo actual, pero son importantes para planificación:
+
+- No hay API implementada para ventas, carrito ni pedidos.
+- No hay API implementada para créditos.
+- Los endpoints de listado no tienen paginación, filtros ni búsqueda configurados.
+- Los permisos privados de inventario están centralizados en rol `Administrador`; no hay permisos granulares por acción.
+- Notificaciones usa `IsAuthenticated` y filtra administradores en queryset; si se quiere consistencia con inventario, podría migrarse a permiso explícito de administrador.

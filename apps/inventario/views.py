@@ -1,15 +1,25 @@
+import calendar
+
+from django.core.exceptions import ValidationError
+from django.db import transaction
+from django.db.models.deletion import ProtectedError
+from django.utils import timezone
 from rest_framework import serializers as rest_serializers
 from rest_framework import mixins, viewsets, status
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from django.core.exceptions import ValidationError
-from django.db.models.deletion import ProtectedError
 
+from . import models
 from . import serializers
 from . import services
-from . import models
-from django.db import transaction
+
+
+def _add_one_month(fecha):
+    year = fecha.year + (1 if fecha.month == 12 else 0)
+    month = 1 if fecha.month == 12 else fecha.month + 1
+    day = min(fecha.day, calendar.monthrange(year, month)[1])
+    return fecha.replace(year=year, month=month, day=day)
 
 
 class ProtectedDestroyMixin:
@@ -188,3 +198,16 @@ class ProduccionAPIView(APIView):
 
         serializer = serializers.ProduccionSerializer(produccion)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ProduccionesProximasVencerAPIView(APIView):
+
+    def get(self, request):
+        fecha_actual = timezone.localdate()
+        fecha_limite = _add_one_month(fecha_actual)
+        producciones = models.Produccion.objects.select_related('id_producto').filter(
+            fecha_vencimiento__date__gte=fecha_actual,
+            fecha_vencimiento__date__lte=fecha_limite,
+        ).order_by('fecha_vencimiento', 'id')
+        serializer = serializers.ProduccionSerializer(producciones, many=True)
+        return Response(serializer.data)
