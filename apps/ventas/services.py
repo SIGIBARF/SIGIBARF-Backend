@@ -263,6 +263,92 @@ def crear_pedido_presencial(usuario, items, tipo_pago):
     )
 
 
+def _validar_pedido_para_credito(pedido):
+    if not pedido.cliente_presencial:
+        raise ValidationError("Solo pedidos presenciales pueden financiarse a crédito.")
+    if pedido.tipo_pago != models.Pedido.TipoPago.CREDITO:
+        raise ValidationError('El pedido debe tener tipo_pago="credito".')
+    if not pedido.usuario_id:
+        raise ValidationError("El pedido a crédito debe tener un usuario asociado.")
+    if pedido.estado_pago == models.Pedido.EstadoPago.APROBADO:
+        raise ValidationError("El pedido ya está confirmado.")
+    _validar_pedido_editable(pedido)
+
+    from apps.creditos.models import Credito
+
+    if Credito.objects.filter(
+        pedido=pedido, fecha_eliminacion__isnull=True
+    ).exists():
+        raise ValidationError("Este pedido ya tiene un crédito asociado.")
+
+
+@transaction.atomic
+def crear_credito_para_pedido(
+    pedido_id,
+    cantidad_cuotas,
+    interes,
+    frecuencia_dias=30,
+    observaciones="",
+):
+    from apps.creditos.services import crear_credito
+
+    try:
+        pedido = models.Pedido.objects.select_for_update().get(pk=pedido_id)
+    except models.Pedido.DoesNotExist:
+        raise ValidationError("Pedido no encontrado.")
+
+    _validar_pedido_para_credito(pedido)
+
+    try:
+        credito = crear_credito(
+            pedido=pedido,
+            usuario=pedido.usuario,
+            cantidad_cuotas=cantidad_cuotas,
+            interes=interes,
+            valor_total=pedido.precio_total,
+            frecuencia_dias=frecuencia_dias,
+            observaciones=observaciones,
+        )
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+
+    _descontar_stock_pedido(pedido)
+    pedido.estado_pago = models.Pedido.EstadoPago.APROBADO
+    pedido.fecha_pago = timezone.now()
+    pedido.save(update_fields=["estado_pago", "fecha_pago"])
+
+    return pedido, credito
+
+
+@transaction.atomic
+def crear_pedido_presencial_con_credito(
+    usuario,
+    items,
+    cantidad_cuotas,
+    interes,
+    frecuencia_dias=30,
+    observaciones="",
+):
+    if not usuario:
+        raise ValidationError("Un pedido a crédito requiere un usuario asociado.")
+
+    pedido = crear_pedido_presencial(
+        usuario=usuario,
+        items=items,
+        tipo_pago=models.Pedido.TipoPago.CREDITO,
+    )
+
+    _, credito = crear_credito_para_pedido(
+        pedido_id=pedido.id,
+        cantidad_cuotas=cantidad_cuotas,
+        interes=interes,
+        frecuencia_dias=frecuencia_dias,
+        observaciones=observaciones,
+    )
+    pedido.refresh_from_db()
+    return pedido, credito
+
+
 def obtener_datos_pago_wompi(pedido_id, usuario):
     try:
         pedido = models.Pedido.objects.get(pk=pedido_id, usuario=usuario)
@@ -362,8 +448,13 @@ def confirmar_pago_manual(pedido_id):
         raise ValidationError(
             "La confirmación manual solo aplica a pedidos presenciales."
         )
-    if pedido.tipo_pago not in TIPOS_PAGO_PRESENCIAL:
-        raise ValidationError("El pedido presencial requiere tipo de pago válido.")
+    if pedido.tipo_pago == models.Pedido.TipoPago.CREDITO:
+        raise ValidationError(
+            "Los pedidos a crédito se confirman registrando el plan de cuotas "
+            "(POST .../credito/ o presencial con bloque credito)."
+        )
+    if pedido.tipo_pago != models.Pedido.TipoPago.EFECTIVO:
+        raise ValidationError('La confirmación manual solo aplica a pedidos en "efectivo".')
 
     _validar_pedido_editable(pedido)
 

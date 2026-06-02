@@ -1,8 +1,8 @@
 # notificaciones.py
 from django.utils import timezone
 
-from notificaciones.models import Notificacion
-from notificaciones.services import create_alert, resolve_alert
+from apps.notificaciones.models import Notificacion
+from apps.notificaciones.services import create_alert, resolve_alert
 
 from .models import CuotaCredito
 

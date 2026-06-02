@@ -138,6 +138,33 @@ class PedidoAdminReadSerializer(PedidoSerializer):
         fields = PedidoSerializer.Meta.fields + ["usuario_id", "usuario_email"]
 
 
+class CreditoPresencialSerializer(serializers.Serializer):
+    """Plan de cuotas para pedidos presenciales a crédito."""
+
+    cantidad_cuotas = serializers.IntegerField(min_value=1)
+    interes = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=4,
+        default=Decimal("0"),
+        help_text="Tasa por período en decimal (0.05 = 5 %).",
+    )
+    frecuencia_dias = serializers.IntegerField(min_value=1, default=30)
+    observaciones = serializers.CharField(required=False, allow_blank=True, default="")
+
+    def validate_interes(self, value):
+        if value < 0:
+            raise serializers.ValidationError("El interés no puede ser negativo.")
+        if value > 1:
+            raise serializers.ValidationError(
+                "El interés debe expresarse en decimal (ej. 0.05 para 5 %)."
+            )
+        return value
+
+
+class CreditoPedidoSerializer(CreditoPresencialSerializer):
+    """Mismos campos para registrar crédito sobre un pedido ya creado."""
+
+
 class PedidoAdminItemSerializer(serializers.Serializer):
     producto_id = serializers.PrimaryKeyRelatedField(
         queryset=Producto.objects.filter(inhabilitado=False),
@@ -159,6 +186,27 @@ class PedidoAdminSerializer(serializers.Serializer):
             (Pedido.TipoPago.CREDITO, Pedido.TipoPago.CREDITO.label),
         ]
     )
+    credito = CreditoPresencialSerializer(required=False)
+
+    def validate(self, data):
+        tipo_pago = data.get("tipo_pago")
+        usuario = data.get("usuario")
+        credito = data.get("credito")
+
+        if tipo_pago == Pedido.TipoPago.CREDITO:
+            if not usuario:
+                raise serializers.ValidationError(
+                    {"usuario": "Es obligatorio para ventas a crédito."}
+                )
+            if not credito:
+                raise serializers.ValidationError(
+                    {"credito": "Debe indicar el plan de cuotas."}
+                )
+        elif credito:
+            raise serializers.ValidationError(
+                {"credito": 'Solo aplica cuando tipo_pago es "credito".'}
+            )
+        return data
 
     def validate_items(self, value):
         if not value:

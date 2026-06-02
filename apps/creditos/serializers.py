@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
-from ventas.models import Pedido
+from apps.ventas.models import Pedido
 
 from .models import Credito, CuotaCredito
 
@@ -69,11 +69,6 @@ class CreditoCreateSerializer(serializers.ModelSerializer):
             )
         return value
 
-    def validate_interes(self, value):
-        if value < 0:
-            raise serializers.ValidationError("El interés no puede ser negativo.")
-        return value
-
     def validate_frecuencia_dias(self, value):
         if value < 1:
             raise serializers.ValidationError(
@@ -82,6 +77,18 @@ class CreditoCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_pedido_id(self, pedido):
+        if not pedido.cliente_presencial:
+            raise serializers.ValidationError(
+                "Solo se puede asociar crédito a pedidos presenciales."
+            )
+        if pedido.tipo_pago != Pedido.TipoPago.CREDITO:
+            raise serializers.ValidationError(
+                'El pedido debe tener tipo de pago "credito".'
+            )
+        if pedido.estado_pago == Pedido.EstadoPago.APROBADO:
+            raise serializers.ValidationError(
+                "El pedido ya está confirmado y no admite un nuevo crédito."
+            )
         if Credito.objects.filter(
             pedido=pedido, fecha_eliminacion__isnull=True
         ).exists():
@@ -89,6 +96,15 @@ class CreditoCreateSerializer(serializers.ModelSerializer):
                 "Este pedido ya tiene un crédito activo asociado."
             )
         return pedido
+
+    def validate_interes(self, value):
+        if value < 0:
+            raise serializers.ValidationError("El interés no puede ser negativo.")
+        if value > 1:
+            raise serializers.ValidationError(
+                "El interés debe expresarse en decimal (ej. 0.05 para 5 %)."
+            )
+        return value
 
 
 class CreditoUpdateSerializer(serializers.ModelSerializer):

@@ -21,4 +21,8 @@ urlpatterns = [
         "admin/pedidos/<int:pedido_id>/confirmar-pago/",
         views.ConfirmarPagoManualView.as_view(),
     ),
+    path(
+        "admin/pedidos/<int:pedido_id>/credito/",
+        views.PedidoCreditoView.as_view(),
+    ),
 ]

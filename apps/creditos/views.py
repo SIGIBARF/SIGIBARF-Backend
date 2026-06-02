@@ -5,11 +5,13 @@ from django.utils import timezone
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from usuarios.permissions import IsAdministrador
+from apps.usuarios.permissions import IsAdministrador
 
 from .models import Credito, CuotaCredito
-from .notifications import (check_credito_notifications,
-                            check_cuota_notifications)
+from .notificaciones import (
+    check_credito_notifications,
+    check_cuota_notifications,
+)
 from .serializers import (CreditoDetailSerializer, CreditoUpdateSerializer,
                           CuotaCreditoDetailSerializer,
                           CuotaCreditoListSerializer,

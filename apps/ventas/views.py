@@ -242,16 +242,69 @@ class PedidoPresencialView(APIView):
         ]
 
         try:
-            pedido = services.crear_pedido_presencial(
-                usuario=vd.get("usuario"),
-                items=items_servicio,
-                tipo_pago=vd["tipo_pago"],
+            if vd["tipo_pago"] == models.Pedido.TipoPago.CREDITO:
+                pedido, credito = services.crear_pedido_presencial_con_credito(
+                    usuario=vd["usuario"],
+                    items=items_servicio,
+                    cantidad_cuotas=vd["credito"]["cantidad_cuotas"],
+                    interes=vd["credito"]["interes"],
+                    frecuencia_dias=vd["credito"].get("frecuencia_dias", 30),
+                    observaciones=vd["credito"].get("observaciones", ""),
+                )
+                respuesta = {
+                    **serializers.PedidoAdminReadSerializer(pedido).data,
+                    "credito_id": credito.id,
+                    "mensaje": (
+                        f"Pedido #{pedido.id} registrado a crédito. "
+                        "Entregue este número en recepción."
+                    ),
+                }
+            else:
+                pedido = services.crear_pedido_presencial(
+                    usuario=vd.get("usuario"),
+                    items=items_servicio,
+                    tipo_pago=vd["tipo_pago"],
+                )
+                respuesta = {
+                    **serializers.PedidoAdminReadSerializer(pedido).data,
+                    "mensaje": (
+                        f"Pedido #{pedido.id} registrado. "
+                        "Confirme el pago en efectivo cuando el cliente pague."
+                    ),
+                }
+        except ValidationError as e:
+            return Response({"detail": e.message}, status=status.HTTP_400_BAD_REQUEST)
+
+        return Response(respuesta, status=status.HTTP_201_CREATED)
+
+
+class PedidoCreditoView(APIView):
+    """Registra el plan de cuotas (crear_credito) para un pedido presencial a crédito."""
+
+    permission_classes = [IsAdministrador]
+
+    def post(self, request, pedido_id):
+        serializer = serializers.CreditoPedidoSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        vd = serializer.validated_data
+        try:
+            pedido, credito = services.crear_credito_para_pedido(
+                pedido_id=pedido_id,
+                cantidad_cuotas=vd["cantidad_cuotas"],
+                interes=vd["interes"],
+                frecuencia_dias=vd.get("frecuencia_dias", 30),
+                observaciones=vd.get("observaciones", ""),
             )
         except ValidationError as e:
             return Response({"detail": e.message}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(
-            serializers.PedidoAdminReadSerializer(pedido).data,
+            {
+                **serializers.PedidoAdminReadSerializer(pedido).data,
+                "credito_id": credito.id,
+            },
             status=status.HTTP_201_CREATED,
         )
 

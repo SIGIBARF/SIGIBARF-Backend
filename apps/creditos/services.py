@@ -141,7 +141,7 @@ def registrar_mayor_monto(credito: Credito, monto_entregado) -> dict:
     _propagar_incremento_anterior(credito)
 
     if cuotas_recien_pagadas:
-        from .notifications import _resolver_alertas_cuota
+        from .notificaciones import _resolver_alertas_cuota
 
         for cuota_pagada in cuotas_recien_pagadas:
             _resolver_alertas_cuota(cuota_pagada)
