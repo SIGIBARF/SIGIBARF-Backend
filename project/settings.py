@@ -32,10 +32,6 @@ WOMPI_PUBLIC_KEY = os.getenv("WOMPI_PUBLIC_KEY")
 WOMPI_INTEGRITY_KEY = os.getenv("WOMPI_INTEGRITY_KEY")
 WOMPI_EVENTS_SECRET = os.getenv("WOMPI_EVENTS_SECRET")
 WOMPI_SANDBOX = os.getenv("WOMPI_SANDBOX", default=True)
-WOMPI_WEBHOOK_ALLOWED_IPS = _split_env_list(os.getenv("WOMPI_WEBHOOK_ALLOWED_IPS", ""))
-CARRITO_CHECKOUT_EXPIRACION_MINUTOS = int(
-    os.getenv("CARRITO_CHECKOUT_EXPIRACION_MINUTOS", "30")
-)
 
 _cors_origins = _split_env_list(
     os.getenv("CORS_ALLOWED_ORIGINS", ""), fallback=FRONTEND_URL

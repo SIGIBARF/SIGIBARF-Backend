@@ -1,17 +1,15 @@
 import logging
-from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from rest_framework import status
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.usuarios.permissions import IsAdministrador
 
-from . import models, serializers, services
+from . import models, serializers, services, wompi
 from .pagination import PedidoPagination
-from .permissions import WompiWebhookPermission
 from .throttling import WompiWebhookRateThrottle
 
 logger = logging.getLogger(__name__)
@@ -78,31 +76,20 @@ class CheckoutView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        serializer = serializers.PedidoCheckoutSerializer(
-            data=request.data,
-            context={"request": request},
-        )
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        vd = serializer.validated_data
         try:
-            pedido = services.crear_pedido_desde_carrito(
-                usuario=request.user,
-                tipo_pago=vd["tipo_pago"],
-                direccion_envio=vd["direccion_envio"],
-                coordenadas_lat=vd.get("coordenadas_lat"),
-                coordenadas_lng=vd.get("coordenadas_lng"),
-            )
+            pedido = services.crear_pedido_desde_carrito(usuario=request.user)
+            datos_wompi = wompi.datos_checkout(pedido)
         except ValidationError as e:
             return Response({"detail": e.message}, status=status.HTTP_400_BAD_REQUEST)
 
         return Response(
             {
                 **serializers.PedidoSerializer(pedido).data,
+                "wompi": datos_wompi,
                 "mensaje": (
-                    "Pedido registrado. Un administrador revisará su solicitud "
-                    "y definirá el costo de envío antes de habilitar el pago."
+                    "Pedido registrado. Complete el pago con Wompi. "
+                    "Conserve el número de pedido para retirarlo en recepción "
+                    "una vez confirmado el pago."
                 ),
             },
             status=status.HTTP_201_CREATED,
@@ -128,7 +115,6 @@ class PedidoListView(APIView):
     def get(self, request):
         pedidos = (
             models.Pedido.objects.filter(usuario=request.user)
-            .exclude(estado_pedido=models.Pedido.EstadoPedido.CANCELADO)
             .prefetch_related("pedidoproducto_set__producto")
             .order_by("-fecha_creacion")
         )
@@ -138,21 +124,38 @@ class PedidoListView(APIView):
         return paginator.get_paginated_response(data)
 
 
+class PedidoDetalleView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pedido_id):
+        try:
+            pedido = models.Pedido.objects.prefetch_related(
+                "pedidoproducto_set__producto"
+            ).get(pk=pedido_id, usuario=request.user)
+        except models.Pedido.DoesNotExist:
+            return Response(
+                {"detail": "Pedido no encontrado."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        return Response(serializers.PedidoSerializer(pedido).data)
+
+
 class WompiWebhookView(APIView):
-    permission_classes = [WompiWebhookPermission]
+    permission_classes = [AllowAny]
     throttle_classes = [WompiWebhookRateThrottle]
 
     def post(self, request):
         payload = request.data
 
         if not wompi.verificar_firma_webhook(payload):
-            logger.warning("Webhook Wompi con firma inválida recibido.")
+            logger.warning("Webhook Wompi con firma inválida.")
             return Response(
-                {"detail": "Firma inválida."}, status=status.HTTP_401_UNAUTHORIZED
+                {"detail": "Firma inválida."},
+                status=status.HTTP_401_UNAUTHORIZED,
             )
 
-        evento = payload.get("event")
-        if evento != "transaction.updated":
+        if payload.get("event") != "transaction.updated":
             return Response(status=status.HTTP_200_OK)
 
         transaccion = payload.get("data", {}).get("transaction", {})
@@ -160,6 +163,7 @@ class WompiWebhookView(APIView):
         estado_wompi = transaccion.get("status")
         referencia = transaccion.get("reference", "")
         monto_centavos = transaccion.get("amount_in_cents")
+        medio_pago = transaccion.get("payment_method_type")
 
         pedido_id = wompi.pedido_id_desde_referencia(referencia)
         if pedido_id is None:
@@ -169,52 +173,35 @@ class WompiWebhookView(APIView):
         try:
             pedido = models.Pedido.objects.get(pk=pedido_id)
         except models.Pedido.DoesNotExist:
-            logger.error("Pedido #%s no encontrado para referencia Wompi.", pedido_id)
+            logger.error("Pedido #%s no encontrado.", pedido_id)
             return Response(status=status.HTTP_200_OK)
 
         if not wompi.referencia_pertenece_a_pedido(pedido, referencia):
-            logger.warning(
-                "Referencia Wompi no coincide con el pedido #%s.", pedido_id
-            )
+            logger.warning("Referencia no coincide — pedido #%s.", pedido_id)
             return Response(status=status.HTTP_200_OK)
 
         try:
             if estado_wompi == wompi.ESTADO_APROBADO:
                 if monto_centavos is None:
-                    logger.error(
-                        "Webhook sin amount_in_cents — pedido #%s", pedido_id
-                    )
+                    logger.error("Webhook sin amount_in_cents — pedido #%s", pedido_id)
                     return Response(status=status.HTTP_200_OK)
 
                 services.confirmar_pago_wompi(
                     pedido_id,
                     id_transaccion,
                     monto_centavos=monto_centavos,
-                )
-                logger.info(
-                    "Pago aprobado — pedido #%s, transacción %s",
-                    pedido_id,
-                    id_transaccion,
+                    medio_pago=medio_pago,
                 )
             elif estado_wompi in wompi.ESTADOS_RECHAZADO:
                 services.rechazar_pago_wompi(pedido_id, id_transaccion)
-                logger.info(
-                    "Pago rechazado (%s) — pedido #%s",
-                    estado_wompi,
-                    pedido_id,
-                )
             else:
                 logger.debug(
-                    "Estado intermedio '%s' ignorado — pedido #%s",
+                    "Estado Wompi '%s' sin acción — pedido #%s",
                     estado_wompi,
                     pedido_id,
                 )
         except ValidationError as e:
-            logger.error(
-                "Error procesando webhook — pedido #%s: %s",
-                pedido_id,
-                e.message,
-            )
+            logger.error("Webhook pedido #%s: %s", pedido_id, e.message)
 
         return Response(status=status.HTTP_200_OK)
 
@@ -235,23 +222,20 @@ class AdminPedidoListView(APIView):
 
         paginator = self.pagination_class()
         page = paginator.paginate_queryset(qs, request)
-        data = serializers.PedidoAdminReadSerializer(page, many=True).data
-        return paginator.get_paginated_response(data)
+        return paginator.get_paginated_response(
+            serializers.PedidoAdminReadSerializer(page, many=True).data
+        )
 
 
 class PedidoPresencialView(APIView):
     permission_classes = [IsAdministrador]
 
     def post(self, request):
-        serializer = serializers.PedidoAdminSerializer(
-            data=request.data,
-            context={"request": request},
-        )
+        serializer = serializers.PedidoAdminSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         vd = serializer.validated_data
-
         items_servicio = [
             {"producto_id": item["producto"].id, "cantidad": item["cantidad"]}
             for item in vd["items"]
@@ -262,10 +246,6 @@ class PedidoPresencialView(APIView):
                 usuario=vd.get("usuario"),
                 items=items_servicio,
                 tipo_pago=vd["tipo_pago"],
-                direccion_envio=vd.get("direccion_envio", ""),
-                costo_envio=vd.get("costo_envio", Decimal("0.00")),
-                coordenadas_lat=vd.get("coordenadas_lat"),
-                coordenadas_lng=vd.get("coordenadas_lng"),
             )
         except ValidationError as e:
             return Response({"detail": e.message}, status=status.HTTP_400_BAD_REQUEST)
@@ -288,62 +268,12 @@ class ConfirmarPagoManualView(APIView):
         return Response(serializers.PedidoAdminReadSerializer(pedido).data)
 
 
-class AdminAprobarPedidoView(APIView):
-    permission_classes = [IsAdministrador]
-
-    def post(self, request, pedido_id):
-        serializer = serializers.PedidoAprobarSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            pedido = services.aprobar_pedido_online(
-                pedido_id,
-                serializer.validated_data["costo_envio"],
-            )
-        except ValidationError as e:
-            return Response({"detail": e.message}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializers.PedidoAdminReadSerializer(pedido).data)
-
-
 class AdminCancelarPedidoView(APIView):
     permission_classes = [IsAdministrador]
 
     def post(self, request, pedido_id):
         try:
             pedido = services.cancelar_pedido_admin(pedido_id)
-        except ValidationError as e:
-            return Response({"detail": e.message}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializers.PedidoAdminReadSerializer(pedido).data)
-
-
-class AdminActualizarEstadoPedidoView(APIView):
-    permission_classes = [IsAdministrador]
-
-    def patch(self, request, pedido_id):
-        serializer = serializers.PedidoEstadoSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-        try:
-            pedido = services.actualizar_estado_pedido(
-                pedido_id,
-                serializer.validated_data["estado_pedido"],
-            )
-        except ValidationError as e:
-            return Response({"detail": e.message}, status=status.HTTP_400_BAD_REQUEST)
-
-        return Response(serializers.PedidoAdminReadSerializer(pedido).data)
-
-
-class AvanzarEstadoPedidoView(APIView):
-    permission_classes = [IsAdministrador]
-
-    def post(self, request, pedido_id):
-        try:
-            pedido = services.avanzar_estado_pedido(pedido_id)
         except ValidationError as e:
             return Response({"detail": e.message}, status=status.HTTP_400_BAD_REQUEST)
 
