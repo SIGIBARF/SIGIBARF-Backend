@@ -4,15 +4,14 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models.deletion import ProtectedError
 from django.utils import timezone
+from rest_framework import mixins
 from rest_framework import serializers as rest_serializers
-from rest_framework import mixins, viewsets, status
+from rest_framework import status, viewsets
 from rest_framework.permissions import AllowAny
-from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
-from . import models
-from . import serializers
-from . import services
+from . import models, serializers, services
 
 
 def _add_one_month(fecha):
@@ -23,14 +22,16 @@ def _add_one_month(fecha):
 
 
 class ProtectedDestroyMixin:
-    protected_error_message = 'No se puede eliminar porque existen registros relacionados.'
+    protected_error_message = (
+        "No se puede eliminar porque existen registros relacionados."
+    )
 
     def destroy(self, request, *args, **kwargs):
         try:
             return super().destroy(request, *args, **kwargs)
         except ProtectedError:
             return Response(
-                {'detail': self.protected_error_message},
+                {"detail": self.protected_error_message},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
@@ -61,29 +62,35 @@ class MovimientoIngredienteViewSet(
 
     def perform_create(self, serializer):
         with transaction.atomic():
-            id_ingrediente = serializer.validated_data['id_ingrediente'].id
-            ingrediente = models.Ingrediente.objects.select_for_update().get(pk=id_ingrediente)
+            id_ingrediente = serializer.validated_data["id_ingrediente"].id
+            ingrediente = models.Ingrediente.objects.select_for_update().get(
+                pk=id_ingrediente
+            )
             stock_anterior = ingrediente.stock_actual
-            cantidad = serializer.validated_data['cantidad']
-            tipo = serializer.validated_data['tipo_movimiento']
+            cantidad = serializer.validated_data["cantidad"]
+            tipo = serializer.validated_data["tipo_movimiento"]
 
-            if tipo == 'ENTRADA':
+            if tipo == "ENTRADA":
                 stock_posterior = stock_anterior + cantidad
                 ingrediente.stock_actual = stock_posterior
-            elif tipo == 'SALIDA':
+            elif tipo == "SALIDA":
                 if cantidad > stock_anterior:
-                    raise rest_serializers.ValidationError('Stock insuficiente para realizar la salida.')
+                    raise rest_serializers.ValidationError(
+                        "Stock insuficiente para realizar la salida."
+                    )
                 stock_posterior = stock_anterior - cantidad
                 ingrediente.stock_actual = stock_posterior
-            elif tipo == 'AJUSTE':
+            elif tipo == "AJUSTE":
                 stock_posterior = cantidad
                 ingrediente.stock_actual = stock_posterior
             else:
-                raise rest_serializers.ValidationError('tipo_movimiento inválido.')
+                raise rest_serializers.ValidationError("tipo_movimiento inválido.")
 
             ingrediente.save()
 
-            serializer.save(stock_anterior=stock_anterior, stock_posterior=stock_posterior)
+            serializer.save(
+                stock_anterior=stock_anterior, stock_posterior=stock_posterior
+            )
 
 
 class MovimientoProductoViewSet(
@@ -97,29 +104,27 @@ class MovimientoProductoViewSet(
 
     def perform_create(self, serializer):
         with transaction.atomic():
-            id_producto = serializer.validated_data['id_producto'].id
+            id_producto = serializer.validated_data["id_producto"].id
             producto = models.Producto.objects.select_for_update().get(pk=id_producto)
             stock_anterior = producto.stock_actual
-            cantidad = serializer.validated_data['cantidad']
-            tipo = serializer.validated_data['tipo_movimiento']
+            cantidad = serializer.validated_data["cantidad"]
+            tipo = serializer.validated_data["tipo_movimiento"]
+            comentarios = serializer.validated_data.get("comentarios", "")
 
-            if tipo == 'ENTRADA':
-                stock_posterior = stock_anterior + cantidad
-                producto.stock_actual = stock_posterior
-            elif tipo == 'SALIDA':
-                if cantidad > stock_anterior:
-                    raise rest_serializers.ValidationError('Stock insuficiente para realizar la salida.')
-                stock_posterior = stock_anterior - cantidad
-                producto.stock_actual = stock_posterior
-            elif tipo == 'AJUSTE':
-                stock_posterior = cantidad
-                producto.stock_actual = stock_posterior
+            if tipo == "ENTRADA":
+                services.registrar_entrada_producto(producto, cantidad)
+            elif tipo == "SALIDA":
+                services.registrar_salida_producto(producto, cantidad)
+            elif tipo == "AJUSTE":
+                services.registrar_ajuste_producto(producto, cantidad)
             else:
-                raise rest_serializers.ValidationError('tipo_movimiento inválido.')
+                raise rest_serializers.ValidationError("tipo_movimiento inválido.")
 
             producto.save()
 
-            serializer.save(stock_anterior=stock_anterior, stock_posterior=stock_posterior)
+            serializer.save(
+                stock_anterior=stock_anterior, stock_posterior=stock_posterior
+            )
 
 
 class ProductoPublicAPIView(APIView):
@@ -145,42 +150,64 @@ class ProductoIngredientePublicAPIView(APIView):
 
     def get(self, request):
         producto_ingredientes = models.ProductoIngrediente.objects.select_related(
-            'id_producto',
-            'id_ingrediente',
+            "id_producto",
+            "id_ingrediente",
         ).all()
-        serializer = serializers.ProductoIngredienteSerializer(producto_ingredientes, many=True)
+        serializer = serializers.ProductoIngredienteSerializer(
+            producto_ingredientes, many=True
+        )
         return Response(serializer.data)
 
 
 class ProduccionAPIView(APIView):
 
     def get(self, request):
-        producciones = models.Produccion.objects.select_related('id_producto').order_by('-fecha_creacion')
+        producciones = models.Produccion.objects.select_related("id_producto").order_by(
+            "-fecha_creacion"
+        )
         serializer = serializers.ProduccionSerializer(producciones, many=True)
         return Response(serializer.data)
 
     def post(self, request):
-        id_producto = request.data.get('id_producto')
-        cantidad = request.data.get('cantidad_producida')
-        fecha_vencimiento = request.data.get('fecha_vencimiento')
+        id_producto = request.data.get("id_producto")
+        cantidad = request.data.get("cantidad_producida")
+        fecha_vencimiento = request.data.get("fecha_vencimiento")
         if id_producto is None or cantidad is None or fecha_vencimiento is None:
-            return Response({'detail': 'id_producto, cantidad_producida y fecha_vencimiento son requeridos.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {
+                    "detail": "id_producto, cantidad_producida y fecha_vencimiento son requeridos."
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             id_producto = int(id_producto)
         except Exception:
-            return Response({'detail': 'id_producto debe ser un entero.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "id_producto debe ser un entero."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             cantidad = int(cantidad)
         except Exception:
-            return Response({'detail': 'cantidad_producida debe ser un entero.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "cantidad_producida debe ser un entero."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-        fecha_vencimiento_field = rest_serializers.DateTimeField(input_formats=['iso-8601', '%Y-%m-%d'])
+        fecha_vencimiento_field = rest_serializers.DateTimeField(
+            input_formats=["iso-8601", "%Y-%m-%d"]
+        )
         try:
-            fecha_vencimiento = fecha_vencimiento_field.run_validation(fecha_vencimiento)
+            fecha_vencimiento = fecha_vencimiento_field.run_validation(
+                fecha_vencimiento
+            )
         except rest_serializers.ValidationError:
-            return Response({'detail': 'fecha_vencimiento debe ser una fecha/hora valida.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": "fecha_vencimiento debe ser una fecha/hora valida."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             produccion = services.crear_produccion(
@@ -189,12 +216,11 @@ class ProduccionAPIView(APIView):
                 fecha_vencimiento=fecha_vencimiento,
             )
         except ValidationError as e:
-            return Response(
-                {'detail': e.message},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"detail": e.message}, status=status.HTTP_400_BAD_REQUEST)
         except models.Producto.DoesNotExist:
-            return Response({'detail': 'Producto no encontrado.'}, status=status.HTTP_404_NOT_FOUND)
+            return Response(
+                {"detail": "Producto no encontrado."}, status=status.HTTP_404_NOT_FOUND
+            )
 
         serializer = serializers.ProduccionSerializer(produccion)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -205,9 +231,13 @@ class ProduccionesProximasVencerAPIView(APIView):
     def get(self, request):
         fecha_actual = timezone.localdate()
         fecha_limite = _add_one_month(fecha_actual)
-        producciones = models.Produccion.objects.select_related('id_producto').filter(
-            fecha_vencimiento__date__gte=fecha_actual,
-            fecha_vencimiento__date__lte=fecha_limite,
-        ).order_by('fecha_vencimiento', 'id')
+        producciones = (
+            models.Produccion.objects.select_related("id_producto")
+            .filter(
+                fecha_vencimiento__date__gte=fecha_actual,
+                fecha_vencimiento__date__lte=fecha_limite,
+            )
+            .order_by("fecha_vencimiento", "id")
+        )
         serializer = serializers.ProduccionSerializer(producciones, many=True)
         return Response(serializer.data)

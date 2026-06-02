@@ -28,6 +28,10 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173").rstrip("/")
 RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", "SIGIBARF <onboarding@resend.dev>")
 GOOGLE_OAUTH_CLIENT_ID = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "")
+WOMPI_PUBLIC_KEY = os.getenv("WOMPI_PUBLIC_KEY")
+WOMPI_INTEGRITY_KEY = os.getenv("WOMPI_INTEGRITY_KEY")
+WOMPI_EVENTS_SECRET = os.getenv("WOMPI_EVENTS_SECRET")
+WOMPI_SANDBOX = os.getenv("WOMPI_SANDBOX", default=True)
 
 _cors_origins = _split_env_list(
     os.getenv("CORS_ALLOWED_ORIGINS", ""), fallback=FRONTEND_URL
@@ -61,6 +65,9 @@ REST_FRAMEWORK = {
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": ("apps.usuarios.permissions.IsAdministrador",),
+    "DEFAULT_THROTTLE_RATES": {
+        "wompi_webhook": os.getenv("WOMPI_WEBHOOK_THROTTLE", "60/min"),
+    },
 }
 
 SIMPLE_JWT = {
