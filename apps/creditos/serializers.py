@@ -4,6 +4,7 @@ from datetime import timedelta
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 from rest_framework import serializers
+
 from apps.ventas.models import Pedido
 
 from .models import Credito, CuotaCredito
@@ -47,6 +48,9 @@ class CreditoCreateSerializer(serializers.ModelSerializer):
     )
     valor_cuota = serializers.DecimalField(
         max_digits=10, decimal_places=2, read_only=True
+    )
+    interes = serializers.DecimalField(
+        required=False, default=0.0, max_digits=5, decimal_places=2
     )
 
     class Meta:
