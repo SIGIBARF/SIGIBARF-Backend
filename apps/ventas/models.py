@@ -16,7 +16,11 @@ class CarritoCompra(models.Model):
         help_text="Usuario/Cliente al que pertenece el carrito",
     )
 
-    estado = models.CharField(max_length=15, choices=Estado.choices)
+    estado = models.CharField(
+        max_length=15,
+        choices=Estado.choices,
+        default=Estado.ACTIVO,
+    )
 
     fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name="Creado en")
     fecha_actualizacion = models.DateTimeField(
@@ -47,7 +51,7 @@ class ProductoCarrito(models.Model):
                 name="unique_producto_carrito",
             ),
             models.CheckConstraint(
-                check=Q(cantidad__gt=0),
+                condition=Q(cantidad__gt=0),
                 name="cantidad_positiva_carrito",
             ),
         ]
@@ -60,7 +64,7 @@ class Pedido(models.Model):
     class TipoPago(models.TextChoices):
         TARJETA = "tarjeta", "Tarjeta"
         TRANSFERENCIA = "transferencia", "Transferencia"
-        BILLETERA_DIGITAL = "billetera_digital", "Billitera_digital"
+        BILLETERA_DIGITAL = "billetera_digital", "Billetera_digital"
         EFECTIVO = "efectivo", "Efectivo"  # Solo en caso de ser presencial
         CREDITO = "credito", "Credito"  # Solo en caso de ser presencial
 
@@ -70,6 +74,7 @@ class Pedido(models.Model):
         PREPARANDO = "preparando", "Preparando"
         ENVIADO = "enviado", "Enviado"
         ENTREGADO = "entregado", "Entregado"
+        CANCELADO = "cancelado", "Cancelado"
 
     class EstadoPago(models.TextChoices):
         APROBADO = "aprobado", "Aprobado"
@@ -79,17 +84,37 @@ class Pedido(models.Model):
     usuario = models.ForeignKey(
         "usuarios.Usuario",
         on_delete=models.PROTECT,
+        null=True,  # En caso de ser presencial
+        blank=True,
     )
     tipo_pago = models.CharField(max_length=20, choices=TipoPago.choices)
     cliente_presencial = models.BooleanField(default=False)
     coordenadas_lat = models.FloatField(null=True, blank=True)
     coordenadas_lng = models.FloatField(null=True, blank=True)
-    direccion_envio = models.TextField()
-    estado_pedido = models.CharField(max_length=20, choices=EstadoPedido.choices)
+    direccion_envio = models.TextField(null=True, blank=True)
+    estado_pedido = models.CharField(
+        max_length=20,
+        choices=EstadoPedido.choices,
+        default=EstadoPedido.PENDIENTE,
+    )
     costo_envio = models.DecimalField(max_digits=8, decimal_places=2, default=0.00)
     precio_total = models.DecimalField(max_digits=10, decimal_places=2)
+    aprobado_admin = models.BooleanField(
+        default=False,
+        help_text=(
+            "True cuando el administrador revisó el pedido y definió el envío. "
+            "Requerido para habilitar el pago online."
+        ),
+    )
     fecha_creacion = models.DateTimeField(auto_now_add=True, verbose_name="Creado en")
 
+    referencia_wompi = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+        unique=True,
+        help_text="Referencia única enviada a Wompi (PEDIDO-{id}-{token}).",
+    )
     id_transaccion_wompi = models.CharField(max_length=100, blank=True, null=True)
     estado_pago = models.CharField(
         max_length=20,
@@ -103,16 +128,16 @@ class Pedido(models.Model):
         verbose_name = "Pedido"
         constraints = [
             models.CheckConstraint(
-                check=~Q(tipo_pago__in=["efectivo", "credito"])
+                condition=~Q(tipo_pago__in=["efectivo", "credito"])
                 | Q(cliente_presencial=True),
                 name="pago_presencial_requerido",
             ),
             models.CheckConstraint(
-                check=Q(precio_total__gt=0),
+                condition=Q(precio_total__gt=0),
                 name="precio_total_positivo",
             ),
             models.CheckConstraint(
-                check=Q(costo_envio__gte=0),
+                condition=Q(costo_envio__gte=0),
                 name="costo_envio_no_negativo",
             ),
         ]
@@ -137,15 +162,15 @@ class PedidoProducto(models.Model):
                 name="unique_pedido_producto",
             ),
             models.CheckConstraint(
-                check=Q(cantidad__gt=0),
+                condition=Q(cantidad__gt=0),
                 name="cantidad_positiva_pedido",
             ),
             models.CheckConstraint(
-                check=Q(precio_unitario__gt=0),
+                condition=Q(precio_unitario__gt=0),
                 name="precio_unitario_positivo",
             ),
             models.CheckConstraint(
-                check=Q(subtotal__gt=0),
+                condition=Q(subtotal__gt=0),
                 name="subtotal_positivo",
             ),
         ]

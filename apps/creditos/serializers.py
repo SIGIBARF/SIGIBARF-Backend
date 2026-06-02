@@ -8,7 +8,6 @@ from ventas.models import Pedido
 from .models import Credito, CuotaCredito
 
 
-# GET credito unico y lista
 class CreditoDetailSerializer(serializers.ModelSerializer):
     User = get_user_model()
     pedido_id = serializers.PrimaryKeyRelatedField(
@@ -36,7 +35,6 @@ class CreditoDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-# POST crear credito
 class CreditoCreateSerializer(serializers.ModelSerializer):
     User = get_user_model()
     pedido_id = serializers.PrimaryKeyRelatedField(
@@ -86,14 +84,12 @@ class CreditoCreateSerializer(serializers.ModelSerializer):
             )
 
 
-# PATCH actualizar observaciones credito
 class CreditoUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Credito
         fields = ["observaciones"]
 
 
-# GET cuota unica de credito
 class CuotaCreditoDetailSerializer(serializers.ModelSerializer):
     credito_id = serializers.PrimaryKeyRelatedField(
         source="credito", queryset=Credito.objects.all()
@@ -116,7 +112,6 @@ class CuotaCreditoDetailSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-# GET todas las coutas de un credito
 class CuotaCreditoListSerializer(serializers.ModelSerializer):
     credito_id = serializers.PrimaryKeyRelatedField(
         source="credito", queryset=Credito.objects.all()
@@ -139,7 +134,6 @@ class CuotaCreditoListSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-# PATCH registrar pago de cuota credito
 class CuotaCreditoUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CuotaCredito
