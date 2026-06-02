@@ -173,6 +173,7 @@ class InventarioEndpointRoleMatrixTest(APITestCase):
             "/api/inventario/movimientos-ingrediente/",
             "/api/inventario/movimientos-producto/",
             "/api/inventario/producciones/",
+            "/api/inventario/producciones/proximas-a-vencer/",
         ]
 
         for url in urls:
@@ -194,6 +195,7 @@ class InventarioEndpointRoleMatrixTest(APITestCase):
             "/api/inventario/movimientos-producto/",
             f"/api/inventario/movimientos-producto/{self.movimiento_producto.id}/",
             "/api/inventario/producciones/",
+            "/api/inventario/producciones/proximas-a-vencer/",
         ]
 
         for url in urls:
@@ -220,6 +222,7 @@ class InventarioEndpointRoleMatrixTest(APITestCase):
             ("patch", f"/api/inventario/movimientos-producto/{self.movimiento_producto.id}/", {}),
             ("delete", f"/api/inventario/movimientos-producto/{self.movimiento_producto.id}/", {}),
             ("post", "/api/inventario/producciones/", {}),
+            ("post", "/api/inventario/producciones/proximas-a-vencer/", {}),
         ]
 
         for method, url, payload in writes:
@@ -574,6 +577,51 @@ class InventarioEndpointDataCoherenceTest(APITestCase):
         list_response = self.client.get("/api/inventario/producciones/")
         self.assertEqual(list_response.status_code, 200)
         self.assertEqual(list_response.data[0]["id"], response.data["id"])
+
+    def test_producciones_proximas_a_vencer_filtra_por_fecha_actual_y_un_mes(self):
+        vencida = Produccion.objects.create(
+            id_producto=self.producto,
+            cantidad_producida=1,
+            fecha_vencimiento=timezone.now() - timedelta(days=1),
+        )
+        vence_hoy = Produccion.objects.create(
+            id_producto=self.producto,
+            cantidad_producida=2,
+            fecha_vencimiento=timezone.now(),
+        )
+        vence_en_quince_dias = Produccion.objects.create(
+            id_producto=self.producto,
+            cantidad_producida=3,
+            fecha_vencimiento=timezone.now() + timedelta(days=15),
+        )
+        Produccion.objects.create(
+            id_producto=self.producto,
+            cantidad_producida=4,
+            fecha_vencimiento=timezone.now() + timedelta(days=45),
+        )
+        Produccion.objects.create(
+            id_producto=self.producto,
+            cantidad_producida=5,
+            fecha_vencimiento=None,
+        )
+
+        response = self.client.get("/api/inventario/producciones/proximas-a-vencer/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [item["id"] for item in response.data],
+            [vence_hoy.id, vence_en_quince_dias.id],
+        )
+        self.assertNotIn(vencida.id, [item["id"] for item in response.data])
+
+    def test_producciones_proximas_a_vencer_solo_permite_get(self):
+        response = self.client.post(
+            "/api/inventario/producciones/proximas-a-vencer/",
+            {},
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 405)
 
 
 class ProduccionStockTest(TestCase):

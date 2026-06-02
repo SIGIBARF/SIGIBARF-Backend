@@ -35,12 +35,13 @@ class UsuarioPrivatePermissionTest(APITestCase):
 
         self.assertEqual(response.status_code, 401)
 
-    def test_endpoint_privado_perfil_rechaza_cliente(self):
+    def test_endpoint_privado_perfil_permite_cliente(self):
         self.client.force_authenticate(user=self.cliente)
 
         response = self.client.get(reverse("perfil"))
 
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["correo"], self.cliente.correo)
 
     def test_endpoint_privado_perfil_permite_administrador(self):
         self.client.force_authenticate(user=self.admin)

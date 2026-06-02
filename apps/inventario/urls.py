@@ -14,5 +14,6 @@ urlpatterns = [
     path('public/ingredientes/', views.IngredientePublicAPIView.as_view(), name='public-ingredientes'),
     path('public/producto-ingredientes/', views.ProductoIngredientePublicAPIView.as_view(), name='public-producto-ingredientes'),
     path('', include(router.urls)),
+    path('producciones/proximas-a-vencer/', views.ProduccionesProximasVencerAPIView.as_view(), name='producciones-proximas-a-vencer'),
     path('producciones/', views.ProduccionAPIView.as_view(), name='producciones'),
 ]
