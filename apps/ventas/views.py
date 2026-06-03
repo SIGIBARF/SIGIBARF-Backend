@@ -141,6 +141,39 @@ class PedidoDetalleView(APIView):
         return Response(serializers.PedidoSerializer(pedido).data)
 
 
+class DeletePendingPedidoView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        pedido = (
+            models.Pedido.objects.filter(
+                usuario=request.user,
+                cliente_presencial=False,
+                estado_pago=models.Pedido.EstadoPago.PENDIENTE,
+            )
+            .order_by("-fecha_creacion")
+            .first()
+        )
+
+        if not pedido:
+            return Response(
+                {"detail": "No se encontró un pedido pendiente para cancelar."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        pedido_id = pedido.id
+        pedido.referencia_wompi = None
+        pedido.id_transaccion_wompi = None
+        pedido.estado_pago = models.Pedido.EstadoPago.CANCELADO
+        pedido.save(
+            update_fields=["referencia_wompi", "id_transaccion_wompi", "estado_pago"]
+        )
+        return Response(
+            {"detail": f"Pedido pendiente #{pedido_id} marcado como cancelado."},
+            status=status.HTTP_200_OK,
+        )
+
+
 class WompiWebhookView(APIView):
     permission_classes = [AllowAny]
     throttle_classes = [WompiWebhookRateThrottle]

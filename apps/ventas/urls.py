@@ -9,6 +9,7 @@ urlpatterns = [
     path("checkout/", views.CheckoutView.as_view()),
     path("pedidos/<int:pedido_id>/", views.PedidoDetalleView.as_view()),
     path("pedidos/<int:pedido_id>/pagar/", views.IniciarPagoPedidoView.as_view()),
+    path("pedidos/pending/", views.DeletePendingPedidoView.as_view()),
     path("mis-pedidos/", views.PedidoListView.as_view()),
     path("webhooks/wompi/", views.WompiWebhookView.as_view()),
     path("admin/pedidos/", views.AdminPedidoListView.as_view()),

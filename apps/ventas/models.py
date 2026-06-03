@@ -56,6 +56,7 @@ class Pedido(models.Model):
         APROBADO = "aprobado", "Aprobado"
         PENDIENTE = "pendiente", "Pendiente"
         RECHAZADO = "rechazado", "Rechazado"
+        CANCELADO = "cancelado", "Cancelado"
 
     usuario = models.ForeignKey(
         "usuarios.Usuario",
