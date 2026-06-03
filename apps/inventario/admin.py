@@ -31,7 +31,7 @@ class IngredienteAdmin(admin.ModelAdmin):
 
 @admin.register(models.Producto)
 class ProductoAdmin(admin.ModelAdmin):
-    list_display = ('id', 'nombre', 'precio', 'stock_actual', 'stock_minimo', 'inhabilitado', 'descripcion')
+    list_display = ('id', 'nombre', 'precio', 'stock_actual', 'stock_minimo', 'imagen', 'inhabilitado', 'descripcion')
 
 
 @admin.register(models.ProductoIngrediente)
