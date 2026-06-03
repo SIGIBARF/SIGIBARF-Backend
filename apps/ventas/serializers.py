@@ -19,6 +19,9 @@ class ProductoCarritoSerializer(serializers.ModelSerializer):
     producto_precio = serializers.DecimalField(
         source="producto.precio", max_digits=10, decimal_places=2, read_only=True
     )
+    producto_imagen = serializers.CharField(
+        source="producto.imagen", read_only=True, allow_null=True
+    )
 
     class Meta:
         model = ProductoCarrito
@@ -27,6 +30,7 @@ class ProductoCarritoSerializer(serializers.ModelSerializer):
             "producto_id",
             "producto_nombre",
             "producto_precio",
+            "producto_imagen",
             "cantidad",
             "fecha_agregado",
             "carrito_compra",
