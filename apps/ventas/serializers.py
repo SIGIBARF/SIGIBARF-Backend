@@ -136,9 +136,15 @@ class PedidoAdminReadSerializer(PedidoSerializer):
     usuario_email = serializers.EmailField(
         source="usuario.correo", read_only=True, allow_null=True
     )
+    usuario = serializers.SerializerMethodField()
 
     class Meta(PedidoSerializer.Meta):
-        fields = PedidoSerializer.Meta.fields + ["usuario_id", "usuario_email"]
+        fields = PedidoSerializer.Meta.fields + ["usuario_id", "usuario_email", "usuario"]
+
+    def get_usuario(self, obj):
+        if obj.usuario:
+            return f"{obj.usuario.nombre} {obj.usuario.apellido}"
+        return None
 
 
 class CreditoPresencialSerializer(serializers.Serializer):
