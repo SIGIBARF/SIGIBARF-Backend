@@ -72,6 +72,18 @@ class Credito(models.Model):
             and timezone.now() > self.fecha_fin
         )
 
+    @property
+    def saldo(self):
+        """Calcula el saldo pendiente del crédito."""
+        from decimal import Decimal
+        cuotas_abiertas = self.cuotas.exclude(
+            estado=CuotaCredito.EstadoCuota.PAGADA
+        ).values_list("valor_cuota_final", "valor_pagado")
+        saldo_total = Decimal("0")
+        for valor_final, valor_pagado in cuotas_abiertas:
+            saldo_total += valor_final - valor_pagado
+        return float(saldo_total)
+
 
 class CuotaCredito(models.Model):
 

@@ -13,6 +13,7 @@ from .models import Credito, CuotaCredito
 class CreditoDetailSerializer(serializers.ModelSerializer):
     pedido_id = serializers.PrimaryKeyRelatedField(source="pedido", read_only=True)
     usuario_id = serializers.PrimaryKeyRelatedField(source="usuario", read_only=True)
+    saldo = serializers.SerializerMethodField()
 
     class Meta:
         model = Credito
@@ -29,8 +30,12 @@ class CreditoDetailSerializer(serializers.ModelSerializer):
             "fecha_fin",
             "observaciones",
             "estado",
+            "saldo",
         ]
         read_only_fields = fields
+
+    def get_saldo(self, obj):
+        return obj.saldo
 
 
 class CreditoCreateSerializer(serializers.ModelSerializer):
