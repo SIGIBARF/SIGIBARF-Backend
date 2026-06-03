@@ -30,6 +30,6 @@ urlpatterns = [
         name='password-reset-confirm',
     ),
     path('me/', PerfilView.as_view(), name='perfil'),
-    path('admin/clientes/', ClienteListView.as_view(), name='admin-cliente-list'),
-    path('admin/clientes/<int:pk>/', ClienteDetailView.as_view(), name='admin-cliente-detail'),
+    path('clientes/', ClienteListView.as_view(), name='cliente-list'),
+    path('clientes/<int:pk>/', ClienteDetailView.as_view(), name='cliente-detail'),
 ]

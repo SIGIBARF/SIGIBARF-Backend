@@ -69,6 +69,8 @@ Content-Type: application/json
 | `PUT` | `/api/usuarios/me/` | Autenticado | Actualizar perfil completo. |
 | `PATCH` | `/api/usuarios/me/` | Autenticado | Actualizar perfil parcial. |
 | `POST` | `/api/usuarios/auth/change-password/` | Autenticado | Cambiar contraseña. |
+| `GET` | `/api/usuarios/clientes/` | Admin | Listar usuarios con rol Cliente. |
+| `GET` | `/api/usuarios/clientes/<id>/` | Admin | Detalle de un cliente. |
 
 ### Inventario
 
@@ -448,6 +450,43 @@ Respuesta `200`:
   "detail": "Contraseña restablecida correctamente."
 }
 ```
+
+### `GET /api/usuarios/clientes/`
+
+Privado. Requiere rol `Administrador`. Lista todos los usuarios que tienen el rol `Cliente`. Los resultados están ordenados por apellido y nombre.
+
+Respuesta `200`: Array de objetos de usuario.
+
+```json
+[
+  {
+    "id": 1,
+    "correo": "cliente@example.com",
+    "nombre": "Ana",
+    "apellido": "Perez",
+    "telefono": "3001234567",
+    "direccion": "Calle 1 # 2-3",
+    "rol": "Cliente",
+    "is_perfil_completo": true,
+    "is_active": true,
+    "created_at": "2026-05-24T00:00:00Z",
+    "updated_at": "2026-05-24T00:00:00Z"
+  }
+]
+```
+
+### `GET /api/usuarios/clientes/<id>/`
+
+Privado. Requiere rol `Administrador`. Obtiene el detalle de un usuario específico, asegurando que tenga el rol `Cliente`.
+
+Respuesta `200`: Objeto de usuario.
+
+Respuesta `404`:
+
+```json
+{"detail": "No encontrado."}
+```
+*(Ocurre si el ID no existe o pertenece a un usuario que no es Cliente).*
 
 ## Inventario
 
