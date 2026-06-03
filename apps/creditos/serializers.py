@@ -14,6 +14,7 @@ class CreditoDetailSerializer(serializers.ModelSerializer):
     pedido_id = serializers.PrimaryKeyRelatedField(source="pedido", read_only=True)
     usuario_id = serializers.PrimaryKeyRelatedField(source="usuario", read_only=True)
     saldo = serializers.SerializerMethodField()
+    usuario = serializers.SerializerMethodField()
 
     class Meta:
         model = Credito
@@ -21,6 +22,7 @@ class CreditoDetailSerializer(serializers.ModelSerializer):
             "id",
             "pedido_id",
             "usuario_id",
+            "usuario",
             "cantidad_cuotas",
             "valor_total",
             "valor_cuota",
@@ -36,6 +38,11 @@ class CreditoDetailSerializer(serializers.ModelSerializer):
 
     def get_saldo(self, obj):
         return obj.saldo
+
+    def get_usuario(self, obj):
+        if obj.usuario:
+            return f"{obj.usuario.nombre} {obj.usuario.apellido}"
+        return None
 
 
 class CreditoCreateSerializer(serializers.ModelSerializer):
