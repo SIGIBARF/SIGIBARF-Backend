@@ -83,6 +83,17 @@ class CreditoViewSet(viewsets.ModelViewSet):
 
         return Response(resultado, status=status.HTTP_200_OK)
 
+    @action(detail=True, methods=["get"], url_path="cuotas")
+    def cuotas(self, request, pk=None):
+        credito = self.get_object()
+        cuotas = credito.cuotas.all().order_by("numero_cuota")
+
+        for cuota in cuotas.exclude(estado=CuotaCredito.EstadoCuota.PAGADA):
+            check_cuota_notifications(cuota)
+
+        serializer = CuotaCreditoDetailSerializer(cuotas, many=True)
+        return Response(serializer.data)
+
 
 class CuotaCreditoViewSet(viewsets.ReadOnlyModelViewSet):
 
