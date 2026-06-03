@@ -368,6 +368,9 @@ def obtener_datos_pago_wompi(pedido_id, usuario):
         pedido.referencia_wompi = None
         pedido.estado_pago = models.Pedido.EstadoPago.PENDIENTE
         pedido.save(update_fields=["referencia_wompi", "estado_pago"])
+    elif pedido.referencia_wompi and pedido.estado_pago == models.Pedido.EstadoPago.PENDIENTE:
+        pedido.referencia_wompi = None
+        pedido.save(update_fields=["referencia_wompi"])
 
     return wompi.datos_checkout(pedido)
 
