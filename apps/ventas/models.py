@@ -49,7 +49,7 @@ class ProductoCarrito(models.Model):
 class Pedido(models.Model):
     class TipoPago(models.TextChoices):
         WOMPI = "wompi", "Wompi"
-        EFECTIVO = "efectivo", "Efectivo"
+        EFECTIVO = "contado", "Contado"
         CREDITO = "credito", "Credito"
 
     class EstadoPago(models.TextChoices):
