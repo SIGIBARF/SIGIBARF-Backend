@@ -2,6 +2,8 @@ from django.urls import path
 
 from apps.usuarios.views import (
     ChangePasswordView,
+    ClienteDetailView,
+    ClienteListView,
     ConfirmResetPasswordView,
     GoogleLoginView,
     HealthView,
@@ -28,4 +30,6 @@ urlpatterns = [
         name='password-reset-confirm',
     ),
     path('me/', PerfilView.as_view(), name='perfil'),
+    path('admin/clientes/', ClienteListView.as_view(), name='admin-cliente-list'),
+    path('admin/clientes/<int:pk>/', ClienteDetailView.as_view(), name='admin-cliente-detail'),
 ]

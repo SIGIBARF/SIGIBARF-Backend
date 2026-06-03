@@ -10,9 +10,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from apps.usuarios.models import Usuario
-from apps.usuarios.permissions import IsAdministrador, get_user_role_name
+from apps.usuarios.permissions import IsAdministrador, ROLE_CLIENTE, get_user_role_name
 from apps.usuarios.serializers import (
     ChangePasswordSerializer,
+    ClienteSerializer,
     ConfirmResetPasswordSerializer,
     GoogleLoginSerializer,
     LoginSerializer,
@@ -214,3 +215,28 @@ class ConfirmResetPasswordView(APIView):
         if not PasswordResetTokenGenerator().check_token(user, token):
             return None
         return user
+
+
+class ClienteListView(generics.ListAPIView):
+    serializer_class = ClienteSerializer
+    permission_classes = [IsAdministrador]
+
+    def get_queryset(self):
+        return (
+            Usuario.objects
+            .filter(rol__nombre=ROLE_CLIENTE)
+            .select_related('rol')
+            .order_by('apellido', 'nombre')
+        )
+
+
+class ClienteDetailView(generics.RetrieveAPIView):
+    serializer_class = ClienteSerializer
+    permission_classes = [IsAdministrador]
+
+    def get_queryset(self):
+        return (
+            Usuario.objects
+            .filter(rol__nombre=ROLE_CLIENTE)
+            .select_related('rol')
+        )

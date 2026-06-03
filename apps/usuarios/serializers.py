@@ -39,6 +39,27 @@ class UsuarioSerializer(serializers.ModelSerializer):
         )
 
 
+class ClienteSerializer(serializers.ModelSerializer):
+    rol = serializers.CharField(source='rol.nombre', read_only=True)
+
+    class Meta:
+        model = Usuario
+        fields = (
+            'id',
+            'correo',
+            'nombre',
+            'apellido',
+            'telefono',
+            'direccion',
+            'rol',
+            'is_perfil_completo',
+            'is_active',
+            'created_at',
+            'updated_at',
+        )
+        read_only_fields = fields
+
+
 class RegistroSerializer(serializers.Serializer):
     correo = serializers.EmailField()
     password = serializers.CharField(write_only=True, min_length=8)
