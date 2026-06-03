@@ -14,7 +14,6 @@ class ProductoCarritoSerializer(serializers.ModelSerializer):
     producto_id = serializers.PrimaryKeyRelatedField(
         queryset=Producto.objects.filter(inhabilitado=False),
         source="producto",
-        write_only=True,
     )
     producto_nombre = serializers.CharField(source="producto.nombre", read_only=True)
     producto_precio = serializers.DecimalField(
@@ -32,7 +31,7 @@ class ProductoCarritoSerializer(serializers.ModelSerializer):
             "fecha_agregado",
             "carrito_compra",
         ]
-        read_only_fields = ["fecha_agregado", "carrito_compra"]
+        read_only_fields = ["fecha_agregado", "carrito_compra", "producto_id"]
 
     def validate_cantidad(self, value):
         if value < 1:
