@@ -44,6 +44,7 @@ class Producto(models.Model):
     stock_minimo = models.PositiveIntegerField()
     inhabilitado = models.BooleanField(default=False)
     descripcion = models.TextField(blank=True, null=True)
+    imagen = models.URLField(max_length=500, null=True, blank=True)
     ingredientes = models.ManyToManyField(Ingrediente, through='ProductoIngrediente', related_name='productos')
 
     class Meta:
