@@ -42,12 +42,13 @@ def _construir_lineas(items_con_cantidad, productos_map):
 
         if producto.inhabilitado:
             raise ValidationError(
-                f'El producto "{producto.nombre}" ya no está disponible.'
+                f"El producto '{producto.nombre}' (ID: {producto.id}) ya no está disponible. "
+                "Ha sido deshabilitado del inventario."
             )
         if producto.stock_actual < cantidad:
             raise ValidationError(
-                f'Stock insuficiente para "{producto.nombre}". '
-                f"Disponible: {producto.stock_actual}, requerido: {cantidad}."
+                f"Stock insuficiente para '{producto.nombre}' (ID: {producto.id}). "
+                f"Disponible: {producto.stock_actual} unidades, requerido: {cantidad}."
             )
 
         subtotal = producto.precio * cantidad
@@ -82,7 +83,9 @@ def _descontar_stock_pedido(pedido):
 
 def _validar_pedido_editable(pedido):
     if pedido.estado_pago == models.Pedido.EstadoPago.APROBADO:
-        raise ValidationError("El pedido ya está confirmado y no puede modificarse.")
+        raise ValidationError(
+            f"No se puede modificar el pedido #{pedido.id}: ya está confirmado y pagado."
+        )
 
 
 def _pedido_web_abierto(usuario):
@@ -108,7 +111,9 @@ def obtener_o_crear_carrito(usuario):
 
 def agregar_producto_carrito(usuario, producto_id, cantidad):
     if cantidad < 1:
-        raise ValidationError("La cantidad debe ser al menos 1.")
+        raise ValidationError(
+            f"La cantidad de productos debe ser al menos 1. Recibido: {cantidad}."
+        )
 
     carrito = obtener_o_crear_carrito(usuario)
 
@@ -117,7 +122,10 @@ def agregar_producto_carrito(usuario, producto_id, cantidad):
             pk=producto_id, inhabilitado=False
         )
     except inventario_models.Producto.DoesNotExist:
-        raise ValidationError("Producto no encontrado o no disponible.")
+        raise ValidationError(
+            f"Producto (ID: {producto_id}) no encontrado o ya no está disponible. "
+            "Verifique que el producto existe y no ha sido deshabilitado."
+        )
 
     try:
         producto_carrito = models.ProductoCarrito.objects.get(
@@ -130,7 +138,8 @@ def agregar_producto_carrito(usuario, producto_id, cantidad):
 
     if producto.stock_actual < nueva_cantidad:
         raise ValidationError(
-            f"Stock insuficiente. Disponible: {producto.stock_actual}."
+            f"Stock insuficiente para '{producto.nombre}'. "
+            f"Disponible: {producto.stock_actual} unidades, total solicitado: {nueva_cantidad}."
         )
 
     if producto_carrito:
@@ -148,7 +157,9 @@ def agregar_producto_carrito(usuario, producto_id, cantidad):
 
 def actualizar_cantidad_carrito(usuario, producto_id, cantidad):
     if cantidad < 1:
-        raise ValidationError("La cantidad debe ser al menos 1.")
+        raise ValidationError(
+            f"La cantidad de productos debe ser al menos 1. Recibido: {cantidad}."
+        )
 
     try:
         producto_carrito = models.ProductoCarrito.objects.select_related(
@@ -158,12 +169,14 @@ def actualizar_cantidad_carrito(usuario, producto_id, cantidad):
             producto_id=producto_id,
         )
     except models.ProductoCarrito.DoesNotExist:
-        raise ValidationError("El producto no está en el carrito.")
+        raise ValidationError(
+            f"El producto (ID: {producto_id}) no está en el carrito de compras."
+        )
 
     if producto_carrito.producto.stock_actual < cantidad:
         raise ValidationError(
-            f"Stock insuficiente. "
-            f"Disponible: {producto_carrito.producto.stock_actual}."
+            f"Stock insuficiente para '{producto_carrito.producto.nombre}'. "
+            f"Disponible: {producto_carrito.producto.stock_actual} unidades, solicitado: {cantidad}."
         )
 
     producto_carrito.cantidad = cantidad
@@ -178,7 +191,9 @@ def eliminar_producto_carrito(usuario, producto_id):
     ).delete()
 
     if eliminados == 0:
-        raise ValidationError("El producto no estaba en el carrito.")
+        raise ValidationError(
+            f"El producto (ID: {producto_id}) no estaba en el carrito de compras."
+        )
 
 
 def _persistir_pedido(usuario, tipo_pago, cliente_presencial, lineas):
@@ -208,18 +223,22 @@ def _persistir_pedido(usuario, tipo_pago, cliente_presencial, lineas):
 def crear_pedido_desde_carrito(usuario):
     if _pedido_web_abierto(usuario):
         raise ValidationError(
-            "Ya tienes un pedido pendiente de pago. "
-            "Completa el pago o espera a que finalice antes de crear otro."
+            f"Ya existe un pedido pendiente de pago. Debe completar el pago o "
+            "esperar a que finalice ese pedido antes de crear otro."
         )
 
     try:
         carrito = models.CarritoCompra.objects.select_for_update().get(usuario=usuario)
     except models.CarritoCompra.DoesNotExist:
-        raise ValidationError("No tienes productos en el carrito.")
+        raise ValidationError(
+            "No tienes productos en el carrito. Anade al menos un producto antes de proceder al pago."
+        )
 
     items = list(models.ProductoCarrito.objects.filter(carrito_compra=carrito))
     if not items:
-        raise ValidationError("El carrito está vacío.")
+        raise ValidationError(
+            "El carrito esta vacio. Anade productos antes de crear un pedido."
+        )
 
     productos_map = _bloquear_productos(item.producto_id for item in items)
     lineas = _construir_lineas(
@@ -238,17 +257,23 @@ def crear_pedido_desde_carrito(usuario):
 @transaction.atomic
 def crear_pedido_presencial(usuario, items, tipo_pago):
     if tipo_pago not in TIPOS_PAGO_PRESENCIAL:
-        raise ValidationError('El tipo de pago debe ser "efectivo" o "credito".')
+        raise ValidationError(
+            f"Tipo de pago '{tipo_pago}' no valido. Valores permitidos: efectivo, credito."
+        )
 
     if not items:
-        raise ValidationError("Debe incluir al menos un producto.")
+        raise ValidationError(
+            "Debe incluir al menos un producto en el pedido."
+        )
 
     producto_ids = [item["producto_id"] for item in items]
     productos_map = _bloquear_productos(producto_ids)
 
     faltantes = set(producto_ids) - productos_map.keys()
     if faltantes:
-        raise ValidationError(f"Productos no encontrados: {sorted(faltantes)}.")
+        raise ValidationError(
+            f"Los siguientes productos no se encontraron o no estan disponibles: {sorted(faltantes)}."
+        )
 
     lineas = _construir_lineas(
         ((item["producto_id"], item["cantidad"]) for item in items),
@@ -265,13 +290,23 @@ def crear_pedido_presencial(usuario, items, tipo_pago):
 
 def _validar_pedido_para_credito(pedido):
     if not pedido.cliente_presencial:
-        raise ValidationError("Solo pedidos presenciales pueden financiarse a crédito.")
+        raise ValidationError(
+            f"No se puede crear credito: el pedido #{pedido.id} es de venta en linea. "
+            "Solo se permite credito para pedidos presenciales."
+        )
     if pedido.tipo_pago != models.Pedido.TipoPago.CREDITO:
-        raise ValidationError('El pedido debe tener tipo_pago="credito".')
+        raise ValidationError(
+            f"No se puede crear credito: el pedido #{pedido.id} tiene tipo_pago '{pedido.get_tipo_pago_display()}'. "
+            "Debe ser 'Credito'."
+        )
     if not pedido.usuario_id:
-        raise ValidationError("El pedido a crédito debe tener un usuario asociado.")
+        raise ValidationError(
+            f"No se puede crear credito para el pedido #{pedido.id}: debe tener un usuario/cliente asociado."
+        )
     if pedido.estado_pago == models.Pedido.EstadoPago.APROBADO:
-        raise ValidationError("El pedido ya está confirmado.")
+        raise ValidationError(
+            f"No se puede crear credito: el pedido #{pedido.id} ya esta confirmado y pagado."
+        )
     _validar_pedido_editable(pedido)
 
     from apps.creditos.models import Credito
@@ -279,7 +314,9 @@ def _validar_pedido_para_credito(pedido):
     if Credito.objects.filter(
         pedido=pedido, fecha_eliminacion__isnull=True
     ).exists():
-        raise ValidationError("Este pedido ya tiene un crédito asociado.")
+        raise ValidationError(
+            f"No se puede crear credito: el pedido #{pedido.id} ya tiene un plan de financiacion activo."
+        )
 
 
 @transaction.atomic
@@ -295,7 +332,9 @@ def crear_credito_para_pedido(
     try:
         pedido = models.Pedido.objects.select_for_update().get(pk=pedido_id)
     except models.Pedido.DoesNotExist:
-        raise ValidationError("Pedido no encontrado.")
+        raise ValidationError(
+            f"Pedido (ID: {pedido_id}) no encontrado. Verifique que el ID sea correcto."
+        )
 
     _validar_pedido_para_credito(pedido)
 
@@ -330,7 +369,10 @@ def crear_pedido_presencial_con_credito(
     observaciones="",
 ):
     if not usuario:
-        raise ValidationError("Un pedido a crédito requiere un usuario asociado.")
+        raise ValidationError(
+            "No se puede crear pedido a credito sin un cliente/usuario asociado. "
+            "Especifique el usuario para proceder."
+        )
 
     pedido = crear_pedido_presencial(
         usuario=usuario,
@@ -353,15 +395,22 @@ def obtener_datos_pago_wompi(pedido_id, usuario):
     try:
         pedido = models.Pedido.objects.get(pk=pedido_id, usuario=usuario)
     except models.Pedido.DoesNotExist:
-        raise ValidationError("Pedido no encontrado.")
+        raise ValidationError(
+            f"Pedido (ID: {pedido_id}) no encontrado para el usuario '{usuario.correo}'."
+        )
 
     if pedido.cliente_presencial:
-        raise ValidationError("Este pedido no utiliza pago online.")
+        raise ValidationError(
+            f"El pedido #{pedido.id} es presencial y no utiliza pago online (Wompi)."
+        )
     if pedido.estado_pago == models.Pedido.EstadoPago.APROBADO:
-        raise ValidationError("Este pedido ya fue pagado.")
+        raise ValidationError(
+            f"El pedido #{pedido.id} ya fue pagado. No se puede iniciar otro pago."
+        )
     if pedido.estado_pago not in _ESTADOS_PAGO_ABIERTO:
         raise ValidationError(
-            f'No se puede iniciar pago con estado "{pedido.estado_pago}".'
+            f"No se puede iniciar pago: el pedido #{pedido.id} tiene estado '{pedido.get_estado_pago_display()}'. "
+            f"Solo se puede pagar en estado 'Pendiente' o 'Rechazado'."
         )
 
     if pedido.estado_pago == models.Pedido.EstadoPago.RECHAZADO:
@@ -382,24 +431,31 @@ def confirmar_pago_wompi(
     try:
         pedido = models.Pedido.objects.select_for_update().get(pk=pedido_id)
     except models.Pedido.DoesNotExist:
-        raise ValidationError("Pedido no encontrado.")
+        raise ValidationError(
+            f"Pedido (ID: {pedido_id}) no encontrado. Verifique que el ID sea correcto."
+        )
 
     if pedido.cliente_presencial:
-        raise ValidationError("Este pedido no se confirma por Wompi.")
+        raise ValidationError(
+            f"El pedido #{pedido.id} es presencial y no se puede confirmar por Wompi (pago online)."
+        )
     if pedido.estado_pago == models.Pedido.EstadoPago.APROBADO:
-        raise ValidationError("El pedido ya fue confirmado.")
+        raise ValidationError(
+            f"El pedido #{pedido.id} ya fue confirmado y pagado. No se puede procesarlo nuevamente."
+        )
 
     if pedido.estado_pago not in _ESTADOS_PAGO_ABIERTO:
         raise ValidationError(
-            f'No se puede confirmar un pago en estado "{pedido.estado_pago}".'
+            f"No se puede confirmar pago: el pedido #{pedido.id} tiene estado '{pedido.get_estado_pago_display()}'. "
+            f"Solo se puede pagar en estado 'Pendiente' o 'Rechazado'."
         )
 
     if monto_centavos is not None:
         esperado = wompi.precio_total_en_centavos(pedido.precio_total)
         if int(monto_centavos) != esperado:
             raise ValidationError(
-                f"Monto de la transacción ({monto_centavos} centavos) no coincide "
-                f"con el total del pedido ({esperado} centavos)."
+                f"Monto de la transaccion (${monto_centavos / 100:.2f}) no coincide con el total "
+                f"del pedido #{pedido.id} (${esperado / 100:.2f}). Transaccion rechazada."
             )
 
     _descontar_stock_pedido(pedido)
@@ -422,16 +478,21 @@ def rechazar_pago_wompi(pedido_id, id_transaccion_wompi):
     try:
         pedido = models.Pedido.objects.select_for_update().get(pk=pedido_id)
     except models.Pedido.DoesNotExist:
-        raise ValidationError("Pedido no encontrado.")
+        raise ValidationError(
+            f"Pedido (ID: {pedido_id}) no encontrado. Verifique que el ID sea correcto."
+        )
 
     if pedido.estado_pago == models.Pedido.EstadoPago.APROBADO:
-        raise ValidationError("El pedido ya fue confirmado.")
+        raise ValidationError(
+            f"No se puede rechazar: el pedido #{pedido.id} ya fue confirmado y pagado."
+        )
     if pedido.estado_pago == models.Pedido.EstadoPago.RECHAZADO:
         return pedido
 
     if pedido.estado_pago != models.Pedido.EstadoPago.PENDIENTE:
         raise ValidationError(
-            f'No se puede rechazar un pago en estado "{pedido.estado_pago}".'
+            f"No se puede rechazar pago: el pedido #{pedido.id} tiene estado '{pedido.get_estado_pago_display()}'. "
+            f"Solo se puede rechazar en estado 'Pendiente'."
         )
 
     pedido.estado_pago = models.Pedido.EstadoPago.RECHAZADO
@@ -445,25 +506,32 @@ def confirmar_pago_manual(pedido_id):
     try:
         pedido = models.Pedido.objects.select_for_update().get(pk=pedido_id)
     except models.Pedido.DoesNotExist:
-        raise ValidationError("Pedido no encontrado.")
+        raise ValidationError(
+            f"Pedido (ID: {pedido_id}) no encontrado. Verifique que el ID sea correcto."
+        )
 
     if not pedido.cliente_presencial:
         raise ValidationError(
-            "La confirmación manual solo aplica a pedidos presenciales."
+            f"No se puede confirmar pago manual: el pedido #{pedido.id} es de venta en linea. "
+            "Solo se permite confirmacion manual para pedidos presenciales."
         )
     if pedido.tipo_pago == models.Pedido.TipoPago.CREDITO:
         raise ValidationError(
-            "Los pedidos a crédito se confirman registrando el plan de cuotas "
-            "(POST .../credito/ o presencial con bloque credito)."
+            f"No se puede confirmar pago manual: el pedido #{pedido.id} es a credito. "
+            "Los pagos de credito se registran mediante el plan de cuotas."
         )
     if pedido.tipo_pago != models.Pedido.TipoPago.EFECTIVO:
-        raise ValidationError('La confirmación manual solo aplica a pedidos en "efectivo".')
+        raise ValidationError(
+            f"No se puede confirmar pago manual: el pedido #{pedido.id} tiene tipo de pago '{pedido.get_tipo_pago_display()}'. "
+            "Solo se permite para tipo 'Contado'."
+        )
 
     _validar_pedido_editable(pedido)
 
     if pedido.estado_pago != models.Pedido.EstadoPago.PENDIENTE:
         raise ValidationError(
-            f'El pedido ya tiene estado de pago "{pedido.estado_pago}".'
+            f"No se puede confirmar pago: el pedido #{pedido.id} ya tiene estado '{pedido.get_estado_pago_display()}'. "
+            "Solo se pueden confirmar pedidos en estado 'Pendiente'."
         )
 
     _descontar_stock_pedido(pedido)
@@ -479,13 +547,16 @@ def cancelar_pedido_admin(pedido_id):
     try:
         pedido = models.Pedido.objects.select_for_update().get(pk=pedido_id)
     except models.Pedido.DoesNotExist:
-        raise ValidationError("Pedido no encontrado.")
+        raise ValidationError(
+            f"Pedido (ID: {pedido_id}) no encontrado. Verifique que el ID sea correcto."
+        )
 
     _validar_pedido_editable(pedido)
 
     if pedido.estado_pago not in _ESTADOS_PAGO_ABIERTO:
         raise ValidationError(
-            f'No se puede cancelar un pedido en estado "{pedido.estado_pago}".'
+            f"No se puede cancelar: el pedido #{pedido.id} tiene estado '{pedido.get_estado_pago_display()}'. "
+            f"Solo se pueden cancelar pedidos en estado 'Pendiente' o 'Rechazado'."
         )
 
     pedido.estado_pago = models.Pedido.EstadoPago.RECHAZADO

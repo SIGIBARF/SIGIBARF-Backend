@@ -75,10 +75,15 @@ def crear_credito(
 def registrar_mayor_monto(credito: Credito, monto_entregado) -> dict:
     monto = Decimal(str(monto_entregado))
     if monto <= 0:
-        raise ValueError("El monto entregado debe ser mayor a 0.")
+        raise ValueError(
+            f"El monto entregado debe ser mayor a $0. Recibido: ${monto}."
+        )
 
     if credito.estado == Credito.EstadoCredito.PAGADO:
-        raise ValueError("El crédito ya está completamente pagado.")
+        raise ValueError(
+            f"No se puede registrar pago: el crédito #{credito.id} ya está "
+            f"completamente pagado (estado: {credito.get_estado_display()})."
+        )
 
     ahora = timezone.now()
 
@@ -93,7 +98,10 @@ def registrar_mayor_monto(credito: Credito, monto_entregado) -> dict:
     )
 
     if not cuotas_abiertas:
-        raise ValueError("No hay cuotas pendientes en este crédito.")
+        raise ValueError(
+            f"No se puede registrar pago: no hay cuotas pendientes en el crédito #{credito.id}. "
+            f"Estado actual: {credito.get_estado_display()}."
+        )
 
     afectadas = []
     cuotas_recien_pagadas = []

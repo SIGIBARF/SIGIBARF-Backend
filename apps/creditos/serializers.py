@@ -82,44 +82,52 @@ class CreditoCreateSerializer(serializers.ModelSerializer):
     def validate_cantidad_cuotas(self, value):
         if value < 1:
             raise serializers.ValidationError(
-                "La cantidad de cuotas debe ser mayor a 0."
+                "La cantidad de cuotas debe ser al menos 1. Recibido: {}.".format(value)
             )
         return value
 
     def validate_frecuencia_dias(self, value):
         if value < 1:
             raise serializers.ValidationError(
-                "La frecuencia de días debe ser al menos 1."
+                "La frecuencia de pago debe ser al menos 1 día. Recibido: {}.".format(value)
             )
         return value
 
     def validate_pedido_id(self, pedido):
         if not pedido.cliente_presencial:
             raise serializers.ValidationError(
-                "Solo se puede asociar crédito a pedidos presenciales."
+                f"No se puede crear crédito: el pedido #{pedido.id} es de venta en línea. "
+                "Solo se permiten créditos para pedidos presenciales."
             )
         if pedido.tipo_pago != Pedido.TipoPago.CREDITO:
             raise serializers.ValidationError(
-                'El pedido debe tener tipo de pago "credito".'
+                f"No se puede crear crédito: el pedido #{pedido.id} tiene tipo de pago "
+                f"'{pedido.get_tipo_pago_display()}'. Debe ser 'Credito'."
             )
         if pedido.estado_pago == Pedido.EstadoPago.APROBADO:
             raise serializers.ValidationError(
-                "El pedido ya está confirmado y no admite un nuevo crédito."
+                f"No se puede crear crédito: el pedido #{pedido.id} ya está confirmado "
+                "y pagado. No se puede modificar."
             )
         if Credito.objects.filter(
             pedido=pedido, fecha_eliminacion__isnull=True
         ).exists():
             raise serializers.ValidationError(
-                "Este pedido ya tiene un crédito activo asociado."
+                f"No se puede crear crédito: el pedido #{pedido.id} ya tiene un plan "
+                "de financiación activo. Elimine el crédito anterior si desea crear uno nuevo."
             )
         return pedido
 
     def validate_interes(self, value):
         if value < 0:
-            raise serializers.ValidationError("El interés no puede ser negativo.")
+            raise serializers.ValidationError(
+                f"El interés no puede ser negativo. Recibido: {value}. "
+                "Exprese como decimal (ej. 0.05 para 5%)."
+            )
         if value > 1:
             raise serializers.ValidationError(
-                "El interés debe expresarse en decimal (ej. 0.05 para 5 %)."
+                f"El interés debe ser menor o igual a 1 (100%). Recibido: {value}. "
+                "Exprese como decimal (ej. 0.05 para 5%)."
             )
         return value
 
@@ -196,5 +204,7 @@ class RegistrarPagoSerializer(serializers.Serializer):
 
     def validate_monto(self, value):
         if value <= 0:
-            raise serializers.ValidationError("El monto debe ser mayor a 0.")
+            raise serializers.ValidationError(
+                f"El monto a pagar debe ser mayor a $0. Recibido: ${value}."
+            )
         return value

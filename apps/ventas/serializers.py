@@ -39,7 +39,9 @@ class ProductoCarritoSerializer(serializers.ModelSerializer):
 
     def validate_cantidad(self, value):
         if value < 1:
-            raise serializers.ValidationError("La cantidad mínima es 1.")
+            raise serializers.ValidationError(
+                f"La cantidad de productos debe ser al menos 1. Recibido: {value}."
+            )
         return value
 
     def validate(self, data):
@@ -48,7 +50,7 @@ class ProductoCarritoSerializer(serializers.ModelSerializer):
         if producto and cantidad and producto.stock_actual < cantidad:
             raise serializers.ValidationError(
                 f"Stock insuficiente para '{producto.nombre}'. "
-                f"Disponible: {producto.stock_actual}."
+                f"Disponible: {producto.stock_actual} unidades, solicitado: {cantidad}."
             )
         return data
 
@@ -205,35 +207,43 @@ class PedidoAdminSerializer(serializers.Serializer):
         if tipo_pago == Pedido.TipoPago.CREDITO:
             if not usuario:
                 raise serializers.ValidationError(
-                    {"usuario": "Es obligatorio para ventas a crédito."}
+                    {"usuario": "Es obligatorio especificar el cliente para ventas a crédito."}
                 )
             if not credito:
                 raise serializers.ValidationError(
-                    {"credito": "Debe indicar el plan de cuotas."}
+                    {"credito": "Para ventas a crédito debe indicar el plan de cuotas (cantidad_cuotas, interés, frecuencia_dias)."}
                 )
         elif credito:
             raise serializers.ValidationError(
-                {"credito": 'Solo aplica cuando tipo_pago es "credito".'}
+                {"credito": f"No se puede crear plan de crédito para tipo_pago '{tipo_pago}'. Solo se permite para tipo_pago 'credito'."}
             )
         return data
 
     def validate_items(self, value):
         if not value:
-            raise serializers.ValidationError("Debe incluir al menos un producto.")
+            raise serializers.ValidationError(
+                "Debe incluir al menos un producto en el pedido."
+            )
 
         product_ids = [item["producto"].id for item in value]
         if len(product_ids) != len(set(product_ids)):
-            raise serializers.ValidationError("La lista contiene productos duplicados.")
+            duplicados = set([x for x in product_ids if product_ids.count(x) > 1])
+            raise serializers.ValidationError(
+                f"La lista contiene productos duplicados: {list(duplicados)}. "
+                "Cada producto debe incluirse una sola vez."
+            )
 
         errores = []
         for item in value:
             producto = item["producto"]
             if producto.stock_actual < item["cantidad"]:
                 errores.append(
-                    f"'{producto.nombre}': disponible {producto.stock_actual}, "
-                    f"solicitado {item['cantidad']}."
+                    f"'{producto.nombre}' (ID: {producto.id}): "
+                    f"disponible {producto.stock_actual} unidades, solicitado {item['cantidad']}."
                 )
         if errores:
-            raise serializers.ValidationError(errores)
+            raise serializers.ValidationError(
+                "Stock insuficiente para los siguientes productos: " + " | ".join(errores)
+            )
 
         return value
