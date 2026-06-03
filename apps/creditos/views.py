@@ -23,7 +23,7 @@ from .services import registrar_mayor_monto
 class CreditoViewSet(viewsets.ModelViewSet):
 
     permission_classes = [IsAdministrador]
-    http_method_names = ["get", "patch", "delete", "head", "options"]
+    http_method_names = ["get", "post", "patch", "delete", "head", "options"]
 
     def get_queryset(self):
         return (

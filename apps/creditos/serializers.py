@@ -1,5 +1,6 @@
 # serializers.py
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
 from django.utils import timezone
@@ -190,7 +191,7 @@ class RegistrarPagoSerializer(serializers.Serializer):
     monto = serializers.DecimalField(
         max_digits=12,
         decimal_places=2,
-        min_value="0.01",
+        min_value=Decimal("0.01"),
     )
 
     def validate_monto(self, value):
