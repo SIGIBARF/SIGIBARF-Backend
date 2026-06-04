@@ -752,6 +752,14 @@ Base: `/api/inventario/productos/`
 
 Lista todos los productos.
 
+**Query Parameters:**
+
+| Parámetro | Tipo | Descripción |
+|---|---|---|
+| `sin_receta` | string | Si es `true`, filtra solo productos que no tienen receta (sin ingredientes asignados). |
+
+Ejemplo: `GET /api/inventario/productos/?sin_receta=true`
+
 #### `POST /api/inventario/productos/`
 
 Body:
@@ -808,6 +816,8 @@ Lista relaciones producto-ingrediente.
 
 #### `POST /api/inventario/producto-ingredientes/`
 
+**Crear un ingrediente en una receta existente:**
+
 Body:
 
 ```json
@@ -824,6 +834,85 @@ Validaciones:
 - `cantidad_ingrediente` debe ser `> 0`.
 - `porcentaje_ingrediente` debe ser `> 0` y `<= 100`.
 - `id_producto` e `id_ingrediente` deben existir.
+- La suma total de porcentajes no puede superar `100%`.
+- Si el producto ya tiene una receta completa (`100%`), responde `400`.
+
+**Crear una receta completa en bloque:**
+
+Body: Array de objetos ingrediente:
+
+```json
+[
+  {
+    "id_producto": 1,
+    "id_ingrediente": 1,
+    "cantidad_ingrediente": "2.50",
+    "porcentaje_ingrediente": "50.00"
+  },
+  {
+    "id_producto": 1,
+    "id_ingrediente": 2,
+    "cantidad_ingrediente": "1.50",
+    "porcentaje_ingrediente": "50.00"
+  }
+]
+```
+
+Validaciones para creación en bloque:
+
+- Todos los ingredientes deben pertenecer al mismo producto.
+- La suma de porcentajes debe ser exactamente `100%`.
+- El producto no debe tener receta previa; responde `400` si la tiene.
+
+Errores comunes:
+
+```json
+{"detail": "La suma de los porcentajes debe ser exactamente 100%. Valor actual: 75%."}
+```
+
+```json
+{"detail": "Todos los ingredientes deben pertenecer al mismo producto."}
+```
+
+```json
+{"detail": "Este producto ya tiene una receta. Debe editarla."}
+```
+
+```json
+{"detail": "El producto ya tiene una receta completa (100%)."}
+```
+
+```json
+{"detail": "Superaría el 100%. Actual: 50%, Nuevo: 60%."}
+```
+
+#### `PATCH /api/inventario/producto-ingredientes/<id>/`
+
+Actualiza parcialmente un ingrediente de una receta.
+
+Body:
+
+```json
+{
+  "cantidad_ingrediente": "3.00",
+  "porcentaje_ingrediente": "15.00"
+}
+```
+
+Validaciones:
+
+- Los cambios no pueden hacer que el total de porcentajes supere `100%`.
+- Responde `400` si la actualización violaría la regla del 100%.
+
+Error común:
+
+```json
+{"detail": "Este cambio superaría el 100%. Otros ingredientes: 60%, Nuevo: 50%."}
+```
+
+#### `DELETE /api/inventario/producto-ingredientes/<id>/`
+
+Elimina un ingrediente de una receta. Permite que la receta quede con porcentaje menor a `100%`.
 
 ### Movimientos de Ingrediente Privado
 
