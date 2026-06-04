@@ -7,6 +7,24 @@ from apps.notificaciones.services import create_alert, resolve_alert
 from .models import CuotaCredito
 
 
+def check_all_creditos_notifications() -> None:
+    from .models import Credito
+
+    creditos = (
+        Credito.objects.filter(
+            estado__in=[
+                Credito.EstadoCredito.ACTIVO,
+                Credito.EstadoCredito.VENCIDO,
+            ]
+        )
+        .select_related("pedido")
+        .prefetch_related("cuotas")
+    )
+
+    for credito in creditos:
+        check_credito_notifications(credito)
+
+
 def check_cuota_notifications(cuota: CuotaCredito) -> None:
     credito = cuota.credito
     if not cuota.notificaciones_activas:
