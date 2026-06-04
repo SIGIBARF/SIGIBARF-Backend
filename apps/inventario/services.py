@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from decimal import Decimal
 from django.db.models import Sum
+from django.utils import timezone
 
 from . import models
 
@@ -75,6 +76,9 @@ def crear_produccion(id_producto, cantidad_producida, fecha_vencimiento):
         raise ValidationError("cantidad_producida debe ser mayor que 0")
     if fecha_vencimiento is None:
         raise ValidationError("fecha_vencimiento es requerida")
+        
+    if fecha_vencimiento.date() < timezone.localdate():
+        raise ValidationError("La fecha de vencimiento no puede ser anterior a la fecha actual.")
 
     with transaction.atomic():
         # traer el producto (select for update para que no se edite el producto durante la produccion)
@@ -155,10 +159,11 @@ def registrar_receta_en_bloque(ingredientes_data):
         raise ValidationError("Todos los ingredientes deben pertenecer al mismo producto.")
     
     id_producto = id_productos.pop() if id_productos else None
-    if id_producto and models.ProductoIngrediente.objects.filter(id_producto=id_producto).exists():
-        raise ValidationError("Este producto ya tiene una receta. Debe editarla.")
 
     with transaction.atomic():
+        if id_producto:
+            models.ProductoIngrediente.objects.filter(id_producto=id_producto).delete()
+            
         registros = [
             models.ProductoIngrediente(**item)
             for item in ingredientes_data
