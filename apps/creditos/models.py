@@ -74,8 +74,8 @@ class Credito(models.Model):
 
     @property
     def saldo(self):
-        """Calcula el saldo pendiente del crédito."""
         from decimal import Decimal
+
         cuotas_abiertas = self.cuotas.exclude(
             estado=CuotaCredito.EstadoCuota.PAGADA
         ).values_list("valor_cuota_final", "valor_pagado")

@@ -151,7 +151,7 @@ def registrar_mayor_monto(credito: Credito, monto_entregado) -> dict:
             "Ingrese un monto igual o menor al saldo total."
         )
 
-    _propagar_incremento_anterior(credito)
+    _recalcular_incrementos(credito)
 
     if cuotas_recien_pagadas:
         from .notificaciones import _resolver_alertas_cuota
@@ -162,6 +162,53 @@ def registrar_mayor_monto(credito: Credito, monto_entregado) -> dict:
     _actualizar_estado_credito(credito, ahora)
 
     return {"afectadas": afectadas, "sobrante": float(monto)}
+
+
+def _recalcular_incrementos(credito: Credito) -> None:
+    cuotas = list(credito.cuotas.all().order_by("numero_cuota"))
+    if not cuotas:
+        return
+
+    interes_por_cuota = []
+    for c in cuotas:
+        interes_acumulado = (
+            c.valor_cuota_final - c.valor_cuota_original - c.incremento_anterior
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        interes_por_cuota.append(interes_acumulado)
+
+        c.incremento_anterior = Decimal("0")
+        c.valor_cuota_final = (c.valor_cuota_original + interes_acumulado).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
+
+    deficit_acumulado = Decimal("0")
+    cuotas_a_guardar = []
+
+    for idx, cuota in enumerate(cuotas):
+        if cuota.estado == CuotaCredito.EstadoCuota.PAGADA:
+            deficit_acumulado = Decimal("0")
+            continue
+
+        cuota.incremento_anterior = deficit_acumulado
+        cuota.valor_cuota_final = (
+            cuota.valor_cuota_original + deficit_acumulado + interes_por_cuota[idx]
+        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+        if cuota.estado == CuotaCredito.EstadoCuota.PARCIAL:
+            deficit = (cuota.valor_cuota_final - cuota.valor_pagado).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+            deficit_acumulado = deficit
+        else:
+            deficit_acumulado = Decimal("0")
+
+        cuotas_a_guardar.append(cuota)
+
+    if cuotas_a_guardar:
+        CuotaCredito.objects.bulk_update(
+            cuotas_a_guardar,
+            ["incremento_anterior", "valor_cuota_final"],
+        )
 
 
 def _sumar_periodos(fecha_inicio, frecuencia_dias: int, n: int):

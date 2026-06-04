@@ -26,9 +26,10 @@ class CreditoViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return (
-            Credito.objects.filter(fecha_eliminacion__isnull=True)
-            .select_related("pedido", "usuario")
-            .prefetch_related("cuotas")
+            Credito.objects.filter(fecha_eliminacion__isnull=True).select_related(
+                "pedido", "usuario"
+            )
+            #            .prefetch_related("cuotas")
         )
 
     def get_serializer_class(self):
