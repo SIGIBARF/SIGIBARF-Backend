@@ -151,23 +151,44 @@ def registrar_mayor_monto(credito: Credito, monto_entregado) -> dict:
             "Ingrese un monto igual o menor al saldo total."
         )
 
-    _recalcular_incrementos(credito)
+    cuotas_pagadas_en_recalculo = _recalcular_incrementos(credito)
+    todas_pagadas = list(cuotas_recien_pagadas)
+    for cuota in cuotas_pagadas_en_recalculo:
+        if cuota not in todas_pagadas:
+            todas_pagadas.append(cuota)
 
-    if cuotas_recien_pagadas:
+    if todas_pagadas:
         from .notificaciones import _resolver_alertas_cuota
 
-        for cuota_pagada in cuotas_recien_pagadas:
+        for cuota_pagada in todas_pagadas:
             _resolver_alertas_cuota(cuota_pagada)
+
+    for cuota in cuotas_pagadas_en_recalculo:
+        ya_incluida = any(
+            a["cuota"] == cuota.numero_cuota
+            and a["estado"] == CuotaCredito.EstadoCuota.PAGADA
+            for a in afectadas
+        )
+        if not ya_incluida:
+            afectadas.append(
+                {
+                    "cuota": cuota.numero_cuota,
+                    "estado": CuotaCredito.EstadoCuota.PAGADA,
+                    "valor_pagado": float(cuota.valor_pagado),
+                }
+            )
 
     _actualizar_estado_credito(credito, ahora)
 
     return {"afectadas": afectadas, "sobrante": float(monto)}
 
 
-def _recalcular_incrementos(credito: Credito) -> None:
+def _recalcular_incrementos(credito: Credito) -> list:
     cuotas = list(credito.cuotas.all().order_by("numero_cuota"))
     if not cuotas:
         return
+
+    ahora = timezone.now()
 
     interes_por_cuota = []
     for c in cuotas:
@@ -209,6 +230,26 @@ def _recalcular_incrementos(credito: Credito) -> None:
             cuotas_a_guardar,
             ["incremento_anterior", "valor_cuota_final"],
         )
+
+    cuotas_a_pagar = []
+    cuotas_pagadas = []
+    for cuota in cuotas:
+        if cuota.estado == CuotaCredito.EstadoCuota.PAGADA:
+            continue
+        if cuota.valor_pagado >= cuota.valor_cuota_final:
+            cuota.valor_pagado = cuota.valor_cuota_final
+            cuota.estado = CuotaCredito.EstadoCuota.PAGADA
+            if cuota.fecha_pago is None:
+                cuota.fecha_pago = ahora
+            cuotas_a_pagar.append(cuota)
+            cuotas_pagadas.append(cuota)
+    if cuotas_a_pagar:
+        CuotaCredito.objects.bulk_update(
+            cuotas_a_pagar,
+            ["valor_pagado", "estado", "fecha_pago"],
+        )
+
+    return cuotas_pagadas
 
 
 def _sumar_periodos(fecha_inicio, frecuencia_dias: int, n: int):
@@ -254,58 +295,6 @@ def aplicar_intereses_vencidos(
     )
     cuota.save(update_fields=["valor_cuota_final", "fecha_ultimo_interes"])
     return True
-
-
-def _propagar_incremento_anterior(credito: Credito) -> None:
-    cuotas = list(
-        credito.cuotas.filter(
-            estado__in=[
-                CuotaCredito.EstadoCuota.PARCIAL,
-                CuotaCredito.EstadoCuota.PENDIENTE,
-                CuotaCredito.EstadoCuota.VENCIDA,
-            ]
-        ).order_by("numero_cuota")
-    )
-
-    for idx, cuota in enumerate(cuotas):
-        if cuota.estado == CuotaCredito.EstadoCuota.PARCIAL:
-            deficit = (cuota.valor_cuota_final - cuota.valor_pagado).quantize(
-                Decimal("0.01"), rounding=ROUND_HALF_UP
-            )
-            if idx + 1 < len(cuotas):
-                siguiente = cuotas[idx + 1]
-
-                intereses_previos = (
-                    siguiente.valor_cuota_final
-                    - (siguiente.valor_cuota_original + siguiente.incremento_anterior)
-                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-                siguiente.incremento_anterior = deficit
-
-                siguiente.valor_cuota_final = (
-                    siguiente.valor_cuota_original + deficit + intereses_previos
-                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-                siguiente.save(
-                    update_fields=["incremento_anterior", "valor_cuota_final"]
-                )
-
-                for resto in cuotas[idx + 2 :]:
-                    if resto.incremento_anterior != Decimal("0"):
-                        intereses_resto = (
-                            resto.valor_cuota_final
-                            - (resto.valor_cuota_original + resto.incremento_anterior)
-                        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-                        resto.incremento_anterior = Decimal("0")
-                        resto.valor_cuota_final = (
-                            resto.valor_cuota_original + intereses_resto
-                        ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-
-                        resto.save(
-                            update_fields=["incremento_anterior", "valor_cuota_final"]
-                        )
-            break
 
 
 def _actualizar_estado_credito(credito: Credito, ahora=None) -> None:
