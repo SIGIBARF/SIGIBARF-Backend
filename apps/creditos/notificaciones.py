@@ -8,6 +8,7 @@ from .models import CuotaCredito
 
 
 def check_cuota_notifications(cuota: CuotaCredito) -> None:
+    credito = cuota.credito
     if not cuota.notificaciones_activas:
         return
 
@@ -24,7 +25,7 @@ def check_cuota_notifications(cuota: CuotaCredito) -> None:
         ):
             return
         mensaje = (
-            f"La cuota #{cuota.numero_cuota} del crédito #{cuota.credito_id} "
+            f"La cuota #{cuota.numero_cuota} del pedido #{credito.pedido_id} "
             f"está en mora. Venció el "
             f"{cuota.fecha_vencimiento.strftime('%d/%m/%Y')}. "
             f"Saldo pendiente: ${cuota.saldo_pendiente:,.2f}."
@@ -41,7 +42,7 @@ def check_cuota_notifications(cuota: CuotaCredito) -> None:
         ):
             return
         mensaje = (
-            f"La cuota #{cuota.numero_cuota} del crédito #{cuota.credito_id} "
+            f"La cuota #{cuota.numero_cuota} del pedido #{credito.pedido_id} "
             f"vence en {dias_restantes} día(s) "
             f"({cuota.fecha_vencimiento.strftime('%d/%m/%Y')}). "
             f"Valor a pagar: ${cuota.valor_cuota_final:,.2f}."
