@@ -155,10 +155,11 @@ def registrar_receta_en_bloque(ingredientes_data):
         raise ValidationError("Todos los ingredientes deben pertenecer al mismo producto.")
     
     id_producto = id_productos.pop() if id_productos else None
-    if id_producto and models.ProductoIngrediente.objects.filter(id_producto=id_producto).exists():
-        raise ValidationError("Este producto ya tiene una receta. Debe editarla.")
 
     with transaction.atomic():
+        if id_producto:
+            models.ProductoIngrediente.objects.filter(id_producto=id_producto).delete()
+            
         registros = [
             models.ProductoIngrediente(**item)
             for item in ingredientes_data
