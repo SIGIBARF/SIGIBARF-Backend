@@ -112,11 +112,18 @@ class MovimientoProductoViewSet(
             comentarios = serializer.validated_data.get("comentarios", "")
 
             if tipo == "ENTRADA":
-                services.registrar_entrada_producto(producto, cantidad)
+                stock_posterior = stock_anterior + cantidad
+                producto.stock_actual = stock_posterior
             elif tipo == "SALIDA":
-                services.registrar_salida_producto(producto, cantidad)
+                if cantidad > stock_anterior:
+                    raise rest_serializers.ValidationError(
+                        "Stock insuficiente para realizar la salida."
+                    )
+                stock_posterior = stock_anterior - cantidad
+                producto.stock_actual = stock_posterior
             elif tipo == "AJUSTE":
-                services.registrar_ajuste_producto(producto, cantidad)
+                stock_posterior = cantidad
+                producto.stock_actual = stock_posterior
             else:
                 raise rest_serializers.ValidationError("tipo_movimiento inválido.")
 
