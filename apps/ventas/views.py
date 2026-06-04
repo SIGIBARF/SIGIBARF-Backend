@@ -149,7 +149,10 @@ class DeletePendingPedidoView(APIView):
             models.Pedido.objects.filter(
                 usuario=request.user,
                 cliente_presencial=False,
-                estado_pago=models.Pedido.EstadoPago.PENDIENTE,
+                estado_pago__in=[
+                    models.Pedido.EstadoPago.PENDIENTE,
+                    models.Pedido.EstadoPago.RECHAZADO,
+                ],
             )
             .order_by("-fecha_creacion")
             .first()
