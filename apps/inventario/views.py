@@ -45,10 +45,46 @@ class ProductoViewSet(ProtectedDestroyMixin, viewsets.ModelViewSet):
     queryset = models.Producto.objects.all()
     serializer_class = serializers.ProductoSerializer
 
+    def get_queryset(self):
+        qs = super().get_queryset()
+        sin_receta = self.request.query_params.get('sin_receta', None)
+        if sin_receta == 'true':
+            productos_con_receta = models.ProductoIngrediente.objects.values_list('id_producto_id', flat=True).distinct()
+            qs = qs.exclude(id__in=productos_con_receta)
+        return qs
+
 
 class ProductoIngredienteViewSet(viewsets.ModelViewSet):
     queryset = models.ProductoIngrediente.objects.all()
     serializer_class = serializers.ProductoIngredienteSerializer
+
+    def get_serializer(self, *args, **kwargs):
+        if self.request.method == 'POST' and isinstance(kwargs.get("data", {}), list):
+            kwargs["many"] = True
+        return super().get_serializer(*args, **kwargs)
+
+    def create(self, request, *args, **kwargs):
+        is_many = isinstance(request.data, list)
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        try:
+            if is_many:
+                services.registrar_receta_en_bloque(serializer.validated_data)
+            else:
+                services.agregar_ingrediente_receta(serializer.validated_data)
+        except ValidationError as e:
+            raise rest_serializers.ValidationError({"detail": e.message})
+            
+        headers = self.get_success_headers(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED, headers=headers)
+
+    def perform_update(self, serializer):
+        try:
+            services.actualizar_ingrediente_receta(self.get_object(), serializer.validated_data)
+        except ValidationError as e:
+            raise rest_serializers.ValidationError({"detail": e.message})
+
 
 
 class MovimientoIngredienteViewSet(

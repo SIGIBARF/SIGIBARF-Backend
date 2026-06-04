@@ -1,5 +1,7 @@
 from django.core.exceptions import ValidationError
 from django.db import transaction
+from decimal import Decimal
+from django.db.models import Sum
 
 from . import models
 
@@ -141,3 +143,57 @@ def validar_stock_produccion(relacion_ings, cantidad_producida):
         raise ValidationError(
             f'Ingrediente "{ing.nombre}" (id={ing.id}) no tiene stock suficiente: requerido {req}, disponible {ing.stock_actual}'
         )
+
+
+def registrar_receta_en_bloque(ingredientes_data):
+    total_porcentaje = sum(Decimal(str(item["porcentaje_ingrediente"])) for item in ingredientes_data)
+    if total_porcentaje != Decimal("100"):
+        raise ValidationError(f"La suma de los porcentajes debe ser exactamente 100%. Valor actual: {total_porcentaje}%.")
+    
+    id_productos = set(item["id_producto"].id for item in ingredientes_data)
+    if len(id_productos) > 1:
+        raise ValidationError("Todos los ingredientes deben pertenecer al mismo producto.")
+    
+    id_producto = id_productos.pop() if id_productos else None
+    if id_producto and models.ProductoIngrediente.objects.filter(id_producto=id_producto).exists():
+        raise ValidationError("Este producto ya tiene una receta. Debe editarla.")
+
+    with transaction.atomic():
+        registros = [
+            models.ProductoIngrediente(**item)
+            for item in ingredientes_data
+        ]
+        return models.ProductoIngrediente.objects.bulk_create(registros)
+
+
+def agregar_ingrediente_receta(ingrediente_data):
+    producto = ingrediente_data["id_producto"]
+    nuevo_porcentaje = Decimal(str(ingrediente_data["porcentaje_ingrediente"]))
+    
+    qs = models.ProductoIngrediente.objects.filter(id_producto=producto)
+    total_actual = qs.aggregate(total=Sum("porcentaje_ingrediente"))["total"] or Decimal("0")
+    
+    if total_actual >= Decimal("100"):
+        raise ValidationError("El producto ya tiene una receta completa (100%).")
+    
+    if total_actual + nuevo_porcentaje > Decimal("100"):
+        raise ValidationError(f"Superaría el 100%. Actual: {total_actual}%, Nuevo: {nuevo_porcentaje}%.")
+        
+    return models.ProductoIngrediente.objects.create(**ingrediente_data)
+
+
+def actualizar_ingrediente_receta(instancia, ingrediente_data):
+    producto = ingrediente_data.get("id_producto", instancia.id_producto)
+    nuevo_porcentaje = Decimal(str(ingrediente_data.get("porcentaje_ingrediente", instancia.porcentaje_ingrediente)))
+    
+    qs = models.ProductoIngrediente.objects.filter(id_producto=producto).exclude(pk=instancia.pk)
+    total_sin_esta_fila = qs.aggregate(total=Sum("porcentaje_ingrediente"))["total"] or Decimal("0")
+    
+    if total_sin_esta_fila + nuevo_porcentaje > Decimal("100"):
+        raise ValidationError(f"Este cambio superaría el 100%. Otros ingredientes: {total_sin_esta_fila}%, Nuevo: {nuevo_porcentaje}%.")
+        
+    for key, value in ingrediente_data.items():
+        setattr(instancia, key, value)
+    instancia.save()
+    return instancia
+
