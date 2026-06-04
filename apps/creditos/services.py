@@ -75,9 +75,7 @@ def crear_credito(
 def registrar_mayor_monto(credito: Credito, monto_entregado) -> dict:
     monto = Decimal(str(monto_entregado))
     if monto <= 0:
-        raise ValueError(
-            f"El monto entregado debe ser mayor a $0. Recibido: ${monto}."
-        )
+        raise ValueError(f"El monto entregado debe ser mayor a $0. Recibido: ${monto}.")
 
     if credito.estado == Credito.EstadoCredito.PAGADO:
         raise ValueError(
@@ -145,6 +143,13 @@ def registrar_mayor_monto(credito: Credito, monto_entregado) -> dict:
             )
             monto = Decimal("0")
             break
+
+    if monto > 0:
+        raise ValueError(
+            f"El monto ingresado (${monto_entregado}) supera el saldo "
+            f"pendiente del crédito #{credito.id} en ${monto:.2f}. "
+            "Ingrese un monto igual o menor al saldo total."
+        )
 
     _propagar_incremento_anterior(credito)
 
